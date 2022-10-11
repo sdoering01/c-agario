@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 #include <arpa/inet.h>
@@ -6,16 +7,45 @@
 #include <sys/epoll.h>
 #include <errno.h>
 #include <signal.h>
+#include <time.h>
+
+#include "geometry.h"
 
 #define MAX_EVENTS 5
-#define MAX_CONNECTIONS 64
+#define MAX_PLAYERS 64
+#define FIELD_HEIGHT 1000
+#define FIELD_WIDTH 1000
 
 static char *too_many_connections_message = "too_many_connections";
 
+typedef struct player {
+    int sock;
+    int id;
+    int size;
+    vec2_t pos;
+    vec2_t target;
+} player_t;
+
 typedef struct context {
     int epoll_fd;
-    int connections[MAX_CONNECTIONS];
+    player_t *players[MAX_PLAYERS];
 } context_t;
+
+static vec2_t generate_player_pos() {
+    float x = rand() % FIELD_WIDTH;
+    float y = rand() % FIELD_HEIGHT;
+    return (vec2_t){x, y};
+}
+
+static player_t *player_new(int sock, int id) {
+    player_t *p = malloc(sizeof(player_t));
+    p->sock = sock;
+    p->id = id;
+    p->size = 100;
+    p->pos = generate_player_pos();
+    p->target = p->pos;
+    return p;
+}
 
 static int send_all(int sock, char *msg, int msg_len) {
     int sent;
@@ -33,29 +63,31 @@ static int send_all(int sock, char *msg, int msg_len) {
     return 0;
 }
 
-static void disconnect_socket(int sock, context_t *ctx) {
+static void disconnect_player(player_t *player, context_t *ctx) {
     int idx = 0;
-    while (idx < MAX_CONNECTIONS && ctx->connections[idx] != sock) {
+    while (idx < MAX_PLAYERS && ctx->players[idx] != player) {
         idx++;
     }
 
-    if (idx < MAX_CONNECTIONS) {
-        ctx->connections[idx] = 0;
+    if (idx < MAX_PLAYERS) {
+        epoll_ctl(ctx->epoll_fd, EPOLL_CTL_DEL, player->sock, NULL);
+        close(player->sock);
+        free(player);
+        ctx->players[idx] = NULL;
+    } else {
+        printf("tried to disconnect player that wasn't in player list\n");
     }
-
-    epoll_ctl(ctx->epoll_fd, EPOLL_CTL_DEL, sock, NULL);
-    close(sock);
 }
 
-static int track_socket(int sock, context_t *ctx) {
+static int join_player(int sock, context_t *ctx) {
     struct epoll_event event = {};
     int ret, idx = 0;
 
-    while (idx < MAX_CONNECTIONS && ctx->connections[idx] != 0) {
+    while (idx < MAX_PLAYERS && ctx->players[idx]) {
         idx++;
     }
 
-    if (idx == MAX_CONNECTIONS) {
+    if (idx == MAX_PLAYERS) {
         printf("Got too many connections");
         // TODO: Swap for binary error message once protocol is established
         send_all(sock, too_many_connections_message, strlen(too_many_connections_message));
@@ -63,28 +95,31 @@ static int track_socket(int sock, context_t *ctx) {
         return -1;
     }
 
+    player_t *player = player_new(sock, idx);
+
     event.events = EPOLLIN;
-    event.data.fd = sock;
+    event.data.ptr = player;
     ret = epoll_ctl(ctx->epoll_fd, EPOLL_CTL_ADD, sock, &event);
     if (ret == -1) {
-        printf("Error adding client_sock to epoll instance, closing socket\n");
+        printf("Error adding player socket to epoll instance, closing socket\n");
+        free(player);
         close(sock);
     } else {
-        ctx->connections[idx] = sock;
+        ctx->players[idx] = player;
+        // TODO: Send position to player
     }
 
     return ret;
 }
 
 static void broadcast(char *msg, int msg_len, context_t *ctx) {
-    int client_sock;
-    for (int i = 0; i < MAX_CONNECTIONS; i++) {
-        client_sock = ctx->connections[i];
-        if (client_sock) {
-            if (send_all(client_sock, msg, msg_len) == -1) {
+    for (int i = 0; i < MAX_PLAYERS; i++) {
+        player_t *player = ctx->players[i];
+        if (player) {
+            if (send_all(player->sock, msg, msg_len) == -1) {
                 printf("Error when sending to socket: errno %d -- %s\n", errno, strerror(errno));
                 printf("Closing socket\n");
-                disconnect_socket(client_sock, ctx);
+                disconnect_player(player, ctx);
             }
         }
     }
@@ -101,6 +136,9 @@ int main(void) {
     // Ignore SIGPIPE signal, which would cause a process exit when we try to
     // send or receive on a broken stream
     signal(SIGPIPE, SIG_IGN);
+
+    // Seed random generator
+    srand(time(NULL));
 
     server_sock = socket(AF_INET, SOCK_STREAM, 0);
     if (server_sock == -1) {
@@ -141,8 +179,7 @@ int main(void) {
     ctx.epoll_fd = epoll_fd;
 
     event.events = EPOLLIN;
-    // The fd that is set here will be available when the event is received
-    event.data.fd = server_sock;
+    event.data.ptr = NULL;
     if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, server_sock, &event)) {
         printf("Error adding server_sock to epoll instance\n");
         close(server_sock);
@@ -153,30 +190,31 @@ int main(void) {
     while (running) {
         event_count = epoll_wait(epoll_fd, events, MAX_EVENTS, -1);
         for (i = 0; i < event_count; i++) {
-            if (events[i].data.fd == server_sock) {
+            // The server socket doesn't have data associated with it in epoll
+            if (!events[i].data.ptr) {
                 client_sock = accept(server_sock, NULL, NULL);
+                printf("got client_sock: %d\n", client_sock);
                 if (client_sock < 0) {
                     printf("Couldn't accept connection...\n");
                     continue;
                 }
-                if (track_socket(client_sock, &ctx)) {
-                    // In case something follows this
+                if (join_player(client_sock, &ctx) == -1) {
                     continue;
                 }
             } else {
-                client_sock = events[i].data.fd;
-
-                bytes_received = recv(client_sock, client_message, sizeof(client_message), 0);
+                player_t *player = events[i].data.ptr;
+                printf("player socket ready: %d\n", player->sock);
+                bytes_received = recv(player->sock, client_message, sizeof(client_message), 0);
                 // Be careful when handling errno, because calls to printf can overwrite it
                 if (bytes_received == -1 && errno != EINTR) {
                     printf("Error when receiving from socket: errno %d -- %s\n", errno, strerror(errno));
                     printf("Closing socket\n");
-                    disconnect_socket(client_sock, &ctx);
+                    disconnect_player(player, &ctx);
                     continue;
                 }
                 // Closed orderly by peer
                 if (bytes_received == 0) {
-                    disconnect_socket(client_sock, &ctx);
+                    disconnect_player(player, &ctx);
                     continue;
                 }
 
