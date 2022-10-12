@@ -16,12 +16,16 @@
 #define FIELD_HEIGHT 1000
 #define FIELD_WIDTH 1000
 
+#define MAX_PLAYER_NAME_LEN 20
+#define DEFAULT_PLAYER_NAME "Unnamed player"
+
 static char *too_many_connections_message = "too_many_connections";
 
 typedef struct player {
     int sock;
     int id;
-    int size;
+    int mass;
+    char *name;
     vec2_t pos;
     vec2_t target;
 } player_t;
@@ -37,14 +41,27 @@ static vec2_t generate_player_pos() {
     return (vec2_t){x, y};
 }
 
-static player_t *player_new(int sock, int id) {
+static player_t *player_new(int sock, int id, char *name) {
+    size_t name_len;
     player_t *p = malloc(sizeof(player_t));
     p->sock = sock;
     p->id = id;
-    p->size = 100;
+    p->mass = 10;
+    if (name && (name_len = strlen(name)) <= MAX_PLAYER_NAME_LEN) {
+        p->name = malloc(name_len + 1);
+        strcpy(p->name, name);
+    } else {
+        p->name = malloc(strlen(DEFAULT_PLAYER_NAME) + 1);
+        strcpy(p->name, DEFAULT_PLAYER_NAME);
+    }
     p->pos = generate_player_pos();
     p->target = p->pos;
     return p;
+}
+
+static void player_free(player_t *p) {
+    free(p->name);
+    free(p);
 }
 
 static int send_all(int sock, char *msg, int msg_len) {
@@ -72,7 +89,7 @@ static void disconnect_player(player_t *player, context_t *ctx) {
     if (idx < MAX_PLAYERS) {
         epoll_ctl(ctx->epoll_fd, EPOLL_CTL_DEL, player->sock, NULL);
         close(player->sock);
-        free(player);
+        player_free(player);
         ctx->players[idx] = NULL;
     } else {
         printf("tried to disconnect player that wasn't in player list\n");
@@ -95,7 +112,8 @@ static int join_player(int sock, context_t *ctx) {
         return -1;
     }
 
-    player_t *player = player_new(sock, idx);
+    // TODO: Use name provided by player
+    player_t *player = player_new(sock, idx, NULL);
 
     event.events = EPOLLIN;
     event.data.ptr = player;
