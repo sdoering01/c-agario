@@ -5,6 +5,7 @@
 #include <arpa/inet.h>
 #include <sys/socket.h>
 #include <sys/epoll.h>
+#include <sys/timerfd.h>
 #include <errno.h>
 #include <signal.h>
 #include <time.h>
@@ -13,6 +14,8 @@
 
 #define MAX_EVENTS 5
 #define MAX_PLAYERS 64
+// Has to be greater than 1
+#define TICKS_PER_SEC 20
 #define FIELD_HEIGHT 1000
 #define FIELD_WIDTH 1000
 
@@ -143,12 +146,18 @@ static void broadcast(char *msg, int msg_len, context_t *ctx) {
     }
 }
 
+static void tick(context_t *ctx) {
+    // TODO: Implement tick logic
+}
+
 int main(void) {
-    int server_sock, client_sock, epoll_fd, running = 1, event_count, i;
+    int server_sock, client_sock, epoll_fd, timer_fd, running = 1, event_count, i;
+    uint64_t tick_count;
     struct sockaddr_in server_addr;
     char client_message[2000] = {};
     ssize_t bytes_received;
     struct epoll_event event = {}, events[MAX_EVENTS] = {};
+    struct itimerspec interval = {};
     context_t ctx = {};
 
     // Ignore SIGPIPE signal, which would cause a process exit when we try to
@@ -188,6 +197,22 @@ int main(void) {
     }
     printf("Listening for incoming connections...\n");
 
+    timer_fd = timerfd_create(CLOCK_MONOTONIC, 0);
+    if (timer_fd == -1) {
+        printf("Error creating timerfd\n");
+        close(server_sock);
+        return 1;
+    }
+
+    interval.it_value.tv_sec = 0;
+    interval.it_value.tv_nsec = 1e9 / TICKS_PER_SEC;
+    interval.it_interval = interval.it_value;
+    if (timerfd_settime(timer_fd, 0, &interval, NULL) == -1) {
+        printf("Error configuring timerfd interval\n");
+        close(server_sock);
+        return 1;
+    }
+
     epoll_fd = epoll_create1(0);
     if (epoll_fd == -1) {
         printf("Error creating epoll instance\n");
@@ -200,6 +225,15 @@ int main(void) {
     event.data.ptr = NULL;
     if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, server_sock, &event)) {
         printf("Error adding server_sock to epoll instance\n");
+        close(server_sock);
+        close(epoll_fd);
+        return 1;
+    }
+
+    event.events = EPOLLIN;
+    event.data.u64 = 1;
+    if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, timer_fd, &event)) {
+        printf("Error adding the timer_fd to epoll instance\n");
         close(server_sock);
         close(epoll_fd);
         return 1;
@@ -219,6 +253,13 @@ int main(void) {
                 if (join_player(client_sock, &ctx) == -1) {
                     continue;
                 }
+            } else if (events[i].data.u64 == 1) {
+                read(timer_fd, &tick_count, 8);
+                if (tick_count > 1) {
+                    printf("warning: missed %ld ticks\n", tick_count - 1);
+                }
+                tick(&ctx);
+                // TODO: Send updates to clients
             } else {
                 player_t *player = events[i].data.ptr;
                 printf("player socket ready: %d\n", player->sock);
@@ -243,6 +284,7 @@ int main(void) {
 
     // TODO: Close all client sockets (first check if that is required)
     close(server_sock);
+    close(timer_fd);
     close(epoll_fd);
 
     return 0;
