@@ -90,6 +90,7 @@ static void disconnect_player(player_t *player, context_t *ctx) {
     }
 
     if (idx < MAX_PLAYERS) {
+        // TODO: Send message to client so it knows the disconnect isn't abnormal
         epoll_ctl(ctx->epoll_fd, EPOLL_CTL_DEL, player->sock, NULL);
         close(player->sock);
         player_free(player);
@@ -210,6 +211,7 @@ int main(void) {
     if (timerfd_settime(timer_fd, 0, &interval, NULL) == -1) {
         printf("Error configuring timerfd interval\n");
         close(server_sock);
+        close(timer_fd);
         return 1;
     }
 
@@ -217,24 +219,27 @@ int main(void) {
     if (epoll_fd == -1) {
         printf("Error creating epoll instance\n");
         close(server_sock);
+        close(timer_fd);
         return 1;
     }
     ctx.epoll_fd = epoll_fd;
 
     event.events = EPOLLIN;
     event.data.ptr = NULL;
-    if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, server_sock, &event)) {
+    if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, server_sock, &event) == -1) {
         printf("Error adding server_sock to epoll instance\n");
         close(server_sock);
+        close(timer_fd);
         close(epoll_fd);
         return 1;
     }
 
     event.events = EPOLLIN;
     event.data.u64 = 1;
-    if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, timer_fd, &event)) {
+    if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, timer_fd, &event) == -1) {
         printf("Error adding the timer_fd to epoll instance\n");
         close(server_sock);
+        close(timer_fd);
         close(epoll_fd);
         return 1;
     }
@@ -251,6 +256,7 @@ int main(void) {
                     continue;
                 }
                 if (join_player(client_sock, &ctx) == -1) {
+                    // In case something gets added after the if statement later
                     continue;
                 }
             } else if (events[i].data.u64 == 1) {
@@ -282,7 +288,11 @@ int main(void) {
         }
     }
 
-    // TODO: Close all client sockets (first check if that is required)
+    for (i = 0; i < MAX_PLAYERS; i++) {
+        if (ctx.players[i]) {
+            disconnect_player(ctx.players[i], &ctx);
+        }
+    }
     close(server_sock);
     close(timer_fd);
     close(epoll_fd);
