@@ -1,4 +1,4 @@
-typedef struct vec2 {
+typedef struct vec2_t {
     float x;
     float y;
 } vec2_t;

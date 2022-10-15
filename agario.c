@@ -24,7 +24,7 @@
 
 static char *too_many_connections_message = "too_many_connections";
 
-typedef struct player {
+typedef struct player_t {
     int sock;
     int id;
     int mass;
@@ -33,7 +33,7 @@ typedef struct player {
     vec2_t target;
 } player_t;
 
-typedef struct context {
+typedef struct context_t {
     int epoll_fd;
     player_t *players[MAX_PLAYERS];
 } context_t;
