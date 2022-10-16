@@ -1,6 +1,6 @@
 TARGET = agario
-OBJECTS = agario.o geometry.o
-HEADERS = geometry.h
+OBJECTS = agario.o geometry.o protocol.o
+HEADERS = geometry.h protocol.h
 CFLAGS = -Wall -O2
 LINK_FLAGS = -lm
 
@@ -10,7 +10,9 @@ LINK_FLAGS = -lm
 $(TARGET): $(OBJECTS)
 	gcc $(OBJECTS) -o $(TARGET) $(LINK_FLAGS)
 
+all: $(TARGET)
+
 clean:
 	rm -f $(OBJECTS) $(TARGET)
 
-.PHONY: clean all
+.PHONY: all clean

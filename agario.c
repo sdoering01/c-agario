@@ -11,6 +11,7 @@
 #include <time.h>
 
 #include "geometry.h"
+#include "protocol.h"
 
 #define MAX_EVENTS 5
 #define MAX_PLAYERS 64
@@ -18,9 +19,6 @@
 #define TICKS_PER_SEC 20
 #define FIELD_HEIGHT 1000
 #define FIELD_WIDTH 1000
-
-#define MAX_PLAYER_NAME_LEN 20
-#define DEFAULT_PLAYER_NAME "Unnamed player"
 
 static char *too_many_connections_message = "too_many_connections";
 
@@ -243,6 +241,32 @@ int main(void) {
         close(epoll_fd);
         return 1;
     }
+
+
+    // TODO: Remove this later on
+    printf("Testing protocol\n");
+
+    uint8_t buf[65535] = {};
+    join_message_t msg;
+    msg.message_type = MSG_JOIN;
+    msg.name_length = 5;
+    msg.name = malloc(6);
+    strncpy(msg.name, "Simon", 6);
+
+    int msg_len = serialize_message((generic_message_t *)&msg, buf, 65535);
+    printf("msg_len: %d\n", msg_len);
+    for (int i = 0; i < msg_len; i++) {
+        printf("%x ", buf[i]);
+    }
+    printf("\n");
+
+    join_message_t *dmsg = (join_message_t *)deserialize_message(buf, msg_len);
+    printf("message_type: %d\n", dmsg->message_type);
+    printf("name_length: %d\n", dmsg->name_length);
+    printf("name: %s\n", dmsg->name);
+    message_free((generic_message_t *)dmsg);
+
+    printf("Finished testing protocol\n");
 
     while (running) {
         event_count = epoll_wait(epoll_fd, events, MAX_EVENTS, -1);
