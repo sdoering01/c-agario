@@ -4,6 +4,7 @@
 #include <string.h>
 #include <arpa/inet.h>
 #include <stdlib.h>
+#include <stdio.h>
 
 static uint16_t deserialize_uint16_t(uint8_t *buf) {
     return ntohs(*(uint16_t *)buf);
@@ -14,7 +15,7 @@ static uint32_t deserialize_uint32_t(uint8_t *buf) {
 }
 
 static float deserialize_float(uint8_t *buf) {
-    return deserialize_uint32_t(buf) >> 6;
+    return deserialize_uint32_t(buf) * 1.0 / (1 << 6);
 }
 
 static char *deserialize_string(uint8_t *buf, size_t char_count) {
@@ -116,6 +117,15 @@ static bool is_valid_serialized_message(uint8_t *buf, uint16_t buf_len) {
             }
             if (got_players != player_count) return false;
             if (payload_len != 0) return false;
+            break;
+        }
+
+        case MSG_PLAYER_JOIN:
+        {
+            if (payload_len < 5) return false;
+            uint8_t name_len = payload[4];
+            if (name_len > 0 && payload_len != 5 + name_len) return false;
+            if (name_len == 0 && payload_len != 5) return false;
             break;
         }
 
@@ -301,13 +311,16 @@ generic_message_t *deserialize_message(uint8_t *buf, uint16_t len) {
             current_players_message_t *msg = malloc(sizeof(current_players_message_t));
             uint16_t player_count = deserialize_uint16_t(payload);
             msg->player_count = player_count;
-            player_info_t *player_infos = malloc(player_count * sizeof(player_info_t));
-            payload += 2;
-            for (int i = 0; i < player_count; i++) {
-                player_infos[i].player_id = deserialize_uint32_t(payload);
-                player_infos[i].name_length = payload[4];
-                player_infos[i].name = deserialize_string(payload + 5, player_infos[i].name_length);
-                payload += 5 + player_infos[i].name_length;
+            player_info_t *player_infos = NULL;
+            if (player_count > 0) {
+                player_infos = malloc(player_count * sizeof(player_info_t));
+                payload += 2;
+                for (int i = 0; i < player_count; i++) {
+                    player_infos[i].player_id = deserialize_uint32_t(payload);
+                    player_infos[i].name_length = payload[4];
+                    player_infos[i].name = deserialize_string(payload + 5, player_infos[i].name_length);
+                    payload += 5 + player_infos[i].name_length;
+                }
             }
             msg->player_infos = player_infos;
             generic_msg = (generic_message_t *)msg;
@@ -337,14 +350,17 @@ generic_message_t *deserialize_message(uint8_t *buf, uint16_t len) {
             player_positions_message_t *msg = malloc(sizeof(player_positions_message_t));
             uint16_t player_count = deserialize_uint16_t(payload);
             msg->player_count = player_count;
-            player_position_t *player_positions = malloc(player_count * sizeof(player_position_t));
-            payload += 2;
-            for (int i = 0; i < player_count; i++) {
-                player_positions[i].player_id = deserialize_uint32_t(payload);
-                player_positions[i].x = deserialize_float(payload + 4);
-                player_positions[i].y = deserialize_float(payload + 8);
-                player_positions[i].mass = deserialize_uint32_t(payload + 12);
-                payload += 16;
+            player_position_t *player_positions = NULL;
+            if (player_count > 0) {
+                player_positions = malloc(player_count * sizeof(player_position_t));
+                payload += 2;
+                for (int i = 0; i < player_count; i++) {
+                    player_positions[i].player_id = deserialize_uint32_t(payload);
+                    player_positions[i].x = deserialize_float(payload + 4);
+                    player_positions[i].y = deserialize_float(payload + 8);
+                    player_positions[i].mass = deserialize_uint32_t(payload + 12);
+                    payload += 16;
+                }
             }
             msg->player_positions = player_positions;
             generic_msg = (generic_message_t *)msg;
@@ -356,13 +372,16 @@ generic_message_t *deserialize_message(uint8_t *buf, uint16_t len) {
             spawned_food_message_t *msg = malloc(sizeof(spawned_food_message_t));
             uint16_t food_count = deserialize_uint16_t(payload);
             msg->food_count = food_count;
-            food_position_t *food_positions = malloc(food_count *  sizeof(food_position_t));
-            payload += 2;
-            for (int i = 0; i < food_count; i++) {
-                food_positions[i].food_id = deserialize_uint32_t(payload);
-                food_positions[i].x = deserialize_float(payload + 4);
-                food_positions[i].y = deserialize_float(payload + 8);
-                payload += 12;
+            food_position_t *food_positions = NULL;
+            if (food_count > 0) {
+                food_positions = malloc(food_count *  sizeof(food_position_t));
+                payload += 2;
+                for (int i = 0; i < food_count; i++) {
+                    food_positions[i].food_id = deserialize_uint32_t(payload);
+                    food_positions[i].x = deserialize_float(payload + 4);
+                    food_positions[i].y = deserialize_float(payload + 8);
+                    payload += 12;
+                }
             }
             msg->food_positions = food_positions;
             generic_msg = (generic_message_t *)msg;
@@ -374,11 +393,14 @@ generic_message_t *deserialize_message(uint8_t *buf, uint16_t len) {
             eaten_food_message_t *msg = malloc(sizeof(eaten_food_message_t));
             uint16_t food_count = deserialize_uint16_t(payload);
             msg->food_count = food_count;
-            uint32_t *food_ids = malloc(food_count * sizeof(uint32_t));
-            payload += 2;
-            for (int i = 0; i < food_count; i++) {
-                food_ids[i] = deserialize_uint32_t(payload);
-                payload += 4;
+            uint32_t *food_ids = NULL;
+            if (food_count > 0) {
+                food_ids = malloc(food_count * sizeof(uint32_t));
+                payload += 2;
+                for (int i = 0; i < food_count; i++) {
+                    food_ids[i] = deserialize_uint32_t(payload);
+                    payload += 4;
+                }
             }
             msg->food_ids = food_ids;
             generic_msg = (generic_message_t *)msg;
@@ -395,6 +417,7 @@ generic_message_t *deserialize_message(uint8_t *buf, uint16_t len) {
 
 int serialize_message(generic_message_t *generic_msg, uint8_t *buf, uint16_t buf_len) {
     int msg_len = 0;
+    uint8_t *orig_buf = buf;
 
     if (!generic_msg || !buf) {
         return -1;
@@ -503,7 +526,7 @@ int serialize_message(generic_message_t *generic_msg, uint8_t *buf, uint16_t buf
         case MSG_EATEN_FOOD:
         {
             eaten_food_message_t *msg = (eaten_food_message_t *)generic_msg;
-            buf = serialize_uint32_t(buf, msg->food_count);
+            buf = serialize_uint16_t(buf, msg->food_count);
             for (int i = 0; i < msg->food_count; i++) {
                 buf = serialize_uint32_t(buf, msg->food_ids[i]);
             }
@@ -511,7 +534,12 @@ int serialize_message(generic_message_t *generic_msg, uint8_t *buf, uint16_t buf
         }
 
         default:
-            return 0;
+            return -1;
+    }
+
+    if (buf - orig_buf != msg_len) {
+        printf("serialized message length is wrong: %ld (should be %d)\n", buf - orig_buf, msg_len);
+        return -1;
     }
 
     return msg_len;
@@ -544,24 +572,28 @@ void message_free(generic_message_t *generic_msg) {
         {
             player_join_message_t *msg = (player_join_message_t *)generic_msg;
             free(msg->player_info.name);
+            break;
         }
 
         case MSG_PLAYER_POSITIONS:
         {
             player_positions_message_t *msg = (player_positions_message_t *)generic_msg;
             free(msg->player_positions);
+            break;
         }
         
         case MSG_SPAWNED_FOOD:
         {
             spawned_food_message_t *msg = (spawned_food_message_t *)generic_msg;
             free(msg->food_positions);
+            break;
         }
 
         case MSG_EATEN_FOOD:
         {
             eaten_food_message_t *msg = (eaten_food_message_t *)generic_msg;
             free(msg->food_ids);
+            break;
         }
     }
 
