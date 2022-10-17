@@ -1,2 +1,5 @@
 agario
 *.o
+
+# Test binaries
+test/test_protocol
