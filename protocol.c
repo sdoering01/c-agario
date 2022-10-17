@@ -71,8 +71,7 @@ static bool is_valid_serialized_message(uint8_t *buf, uint16_t buf_len) {
             if (payload_len < 1) return false;
             uint8_t name_len = payload[0];
             if (name_len > MAX_PLAYER_NAME_LEN) return false;
-            if (name_len > 0 && payload_len != 1 + name_len) return false;
-            if (name_len == 0 && payload_len > 1) return false;
+            if (payload_len != 1 + name_len) return false;
             break;
         }
 
@@ -111,7 +110,8 @@ static bool is_valid_serialized_message(uint8_t *buf, uint16_t buf_len) {
                 if (payload_len < 5) return false;
                 got_players++;
                 uint8_t name_len = payload[4];
-                if (name_len > 0 && payload_len < 5 + name_len) return false;
+                if (name_len > MAX_PLAYER_NAME_LEN) return false;
+                if (payload_len < 5 + name_len) return false;
                 payload += 5 + name_len;
                 payload_len -= 5 + name_len;
             }
@@ -124,8 +124,8 @@ static bool is_valid_serialized_message(uint8_t *buf, uint16_t buf_len) {
         {
             if (payload_len < 5) return false;
             uint8_t name_len = payload[4];
-            if (name_len > 0 && payload_len != 5 + name_len) return false;
-            if (name_len == 0 && payload_len != 5) return false;
+            if (name_len > MAX_PLAYER_NAME_LEN) return false;
+            if (payload_len != 5 + name_len) return false;
             break;
         }
 
