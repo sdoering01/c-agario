@@ -159,6 +159,24 @@ static bool is_valid_serialized_message(uint8_t *buf, uint16_t buf_len) {
             break;
         }
 
+        case MSG_JOIN_ERROR:
+        {
+            if (payload_len < 2) return false;
+            uint8_t error_code = payload[0];
+            if (error_code != JOIN_ERR_GAME_FULL) return false;
+            uint8_t error_message_length = payload[1];
+            if (payload_len != 2 + error_message_length) return false; 
+            break;
+        }
+
+        case MSG_KICK:
+        {
+            if (payload_len < 1) return false;
+            uint8_t reason_len = payload[0];
+            if (payload_len != 1 + reason_len) return false;
+            break;
+        }
+
         default:
             return false;
     }
@@ -241,6 +259,20 @@ static int serialized_message_length(generic_message_t *generic_msg) {
         {
             eaten_food_message_t *msg = (eaten_food_message_t *)generic_msg;
             len += 2 + msg->food_count * 4;
+            break;
+        }
+
+        case MSG_JOIN_ERROR:
+        {
+            join_error_message_t *msg = (join_error_message_t *)generic_msg;
+            len += 2 + msg->error_message_length;
+            break;
+        }
+
+        case MSG_KICK:
+        {
+            kick_message_t *msg = (kick_message_t *)generic_msg;
+            len += 1 + msg->reason_length;
             break;
         }
 
@@ -407,6 +439,25 @@ generic_message_t *deserialize_message(uint8_t *buf, uint16_t len) {
             break;
         }
 
+        case MSG_JOIN_ERROR:
+        {
+            join_error_message_t *msg = malloc(sizeof(join_error_message_t));
+            msg->error_code = payload[0];
+            msg->error_message_length = payload[1];
+            msg->error_message = deserialize_string(payload + 2, msg->error_message_length);
+            generic_msg = (generic_message_t *)msg;
+            break;
+        }
+
+        case MSG_KICK:
+        {
+            kick_message_t *msg = malloc(sizeof(kick_message_t));
+            msg->reason_length = payload[0];
+            msg->reason = deserialize_string(payload + 1, msg->reason_length);
+            generic_msg = (generic_message_t *)msg;
+            break;
+        }
+
         default:
             return NULL;
     }
@@ -533,6 +584,23 @@ int serialize_message(generic_message_t *generic_msg, uint8_t *buf, uint16_t buf
             break;
         }
 
+        case MSG_JOIN_ERROR:
+        {
+            join_error_message_t *msg = (join_error_message_t *)generic_msg;
+            buf = serialize_uint8_t(buf, msg->error_code);
+            buf = serialize_uint8_t(buf, msg->error_message_length);
+            buf = serialize_memcpy(buf, msg->error_message, msg->error_message_length);
+            break;
+        }
+
+        case MSG_KICK:
+        {
+            kick_message_t *msg = (kick_message_t *)generic_msg;
+            buf = serialize_uint8_t(buf, msg->reason_length);
+            buf = serialize_memcpy(buf, msg->reason, msg->reason_length);
+            break;
+        }
+
         default:
             return -1;
     }
@@ -593,6 +661,20 @@ void message_free(generic_message_t *generic_msg) {
         {
             eaten_food_message_t *msg = (eaten_food_message_t *)generic_msg;
             free(msg->food_ids);
+            break;
+        }
+
+        case MSG_JOIN_ERROR:
+        {
+            join_error_message_t *msg = (join_error_message_t *)generic_msg;
+            free(msg->error_message);
+            break;
+        }
+
+        case MSG_KICK:
+        {
+            kick_message_t *msg = (kick_message_t *)generic_msg;
+            free(msg->reason);
             break;
         }
     }

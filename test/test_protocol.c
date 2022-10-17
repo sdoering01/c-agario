@@ -382,6 +382,92 @@ void test_empty_eaten_food_message(void) {
     message_free((generic_message_t *)msg2);
 }
 
+void test_join_error_message(void) {
+    size_t len;
+    join_error_message_t *msg = malloc(sizeof(join_error_message_t));
+
+    msg->message_type = MSG_JOIN_ERROR;
+    msg->error_code = JOIN_ERR_GAME_FULL;
+    msg->error_message_length = 12;
+    msg->error_message = malloc(13);
+    strncpy(msg->error_message, "Game is full", 13);
+
+    len = serialize_message((generic_message_t *)msg, buf, BUF_SIZE);
+    TEST_ASSERT_EQUAL(17, len);
+
+    join_error_message_t *msg2 = (join_error_message_t *)deserialize_message(buf, len);
+    TEST_ASSERT_EQUAL(MSG_JOIN_ERROR, msg2->message_type);
+    TEST_ASSERT_EQUAL(JOIN_ERR_GAME_FULL, msg2->error_code);
+    TEST_ASSERT_EQUAL(12, msg2->error_message_length);
+    TEST_ASSERT_EQUAL_STRING("Game is full", msg2->error_message);
+
+    message_free((generic_message_t *)msg);
+    message_free((generic_message_t *)msg2);
+}
+
+void test_empty_join_error_message(void) {
+    size_t len;
+    join_error_message_t *msg = malloc(sizeof(join_error_message_t));
+
+    msg->message_type = MSG_JOIN_ERROR;
+    msg->error_code = JOIN_ERR_GAME_FULL;
+    msg->error_message_length = 0;
+    msg->error_message = NULL;
+
+    len = serialize_message((generic_message_t *)msg, buf, BUF_SIZE);
+    TEST_ASSERT_EQUAL(5, len);
+
+    join_error_message_t *msg2 = (join_error_message_t *)deserialize_message(buf, len);
+    TEST_ASSERT_EQUAL(MSG_JOIN_ERROR, msg2->message_type);
+    TEST_ASSERT_EQUAL(JOIN_ERR_GAME_FULL, msg2->error_code);
+    TEST_ASSERT_EQUAL(0, msg2->error_message_length);
+    TEST_ASSERT_NULL(msg2->error_message);
+
+    message_free((generic_message_t *)msg);
+    message_free((generic_message_t *)msg2);
+}
+
+void test_kick_message(void) {
+    size_t len;
+    kick_message_t *msg = malloc(sizeof(kick_message_t));
+
+    msg->message_type = MSG_KICK;
+    msg->reason_length = 29;
+    msg->reason = malloc(30);
+    strncpy(msg->reason, "You were kicked from the game", 30);
+
+    len = serialize_message((generic_message_t *)msg, buf, BUF_SIZE);
+    TEST_ASSERT_EQUAL(33, len);
+
+    kick_message_t *msg2 = (kick_message_t *)deserialize_message(buf, len);
+    TEST_ASSERT_EQUAL(MSG_KICK, msg2->message_type);
+    TEST_ASSERT_EQUAL(29, msg2->reason_length);
+    TEST_ASSERT_EQUAL_STRING("You were kicked from the game", msg2->reason);
+
+    message_free((generic_message_t *)msg);
+    message_free((generic_message_t *)msg2);
+}
+
+void test_empty_kick_message(void) {
+    size_t len;
+    kick_message_t *msg = malloc(sizeof(kick_message_t));
+
+    msg->message_type = MSG_KICK;
+    msg->reason_length = 0;
+    msg->reason = NULL;
+
+    len = serialize_message((generic_message_t *)msg, buf, BUF_SIZE);
+    TEST_ASSERT_EQUAL(4, len);
+
+    kick_message_t *msg2 = (kick_message_t *)deserialize_message(buf, len);
+    TEST_ASSERT_EQUAL(MSG_KICK, msg2->message_type);
+    TEST_ASSERT_EQUAL(0, msg2->reason_length);
+    TEST_ASSERT_NULL(msg2->reason);
+
+    message_free((generic_message_t *)msg);
+    message_free((generic_message_t *)msg2);
+}
+
 int main(void) {
     UNITY_BEGIN();
     RUN_TEST(test_join_message);
@@ -399,5 +485,9 @@ int main(void) {
     RUN_TEST(test_empty_spawned_food_message);
     RUN_TEST(test_eaten_food_message);
     RUN_TEST(test_empty_eaten_food_message);
+    RUN_TEST(test_join_error_message);
+    RUN_TEST(test_empty_join_error_message);
+    RUN_TEST(test_kick_message);
+    RUN_TEST(test_empty_kick_message);
     return UNITY_END();
 }

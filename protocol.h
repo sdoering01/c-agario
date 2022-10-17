@@ -7,6 +7,7 @@
 #define DEFAULT_PLAYER_NAME "Unnamed Player"
 
 #define REJOIN_TOKEN_LEN 16
+#define MAX_REASON_MESSAGE_LEN 255
 
 typedef uint8_t rejoin_token_t[REJOIN_TOKEN_LEN];
 
@@ -109,6 +110,22 @@ typedef struct eaten_food_message_t {
     uint16_t food_count;
     uint32_t *food_ids;
 } eaten_food_message_t;
+
+#define MSG_JOIN_ERROR 40
+#define JOIN_ERR_GAME_FULL 1
+typedef struct join_error_message_t {
+    uint8_t message_type;
+    uint8_t error_code;
+    uint8_t error_message_length;
+    char *error_message;
+} join_error_message_t;
+
+#define MSG_KICK 41
+typedef struct kick_message_t {
+    uint8_t message_type;
+    uint8_t reason_length;
+    char *reason;
+} kick_message_t;
 
 // Returns a pointer to a generic_message_t if the deserialization was successful, or else NULL
 generic_message_t *deserialize_message(uint8_t *buf, uint16_t len);
