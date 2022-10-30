@@ -246,7 +246,28 @@ static void handle_player_message(uint8_t *recv_buf, uint16_t recv_len, player_t
             free(current_players_msg.player_infos);
         } else if (player->joined) {
             switch (generic_msg->message_type) {
-                // TODO: Handle other messages
+                case MSG_LEAVE:
+                {
+                    player_leave_message_t player_leave_msg = {};
+                    player_leave_msg.message_type = MSG_PLAYER_LEAVE;
+                    player_leave_msg.player_id = player->id;
+                    disconnect_player(player, ctx);
+                    send_len = serialize_message(
+                            (generic_message_t *)&player_leave_msg, send_buf, sizeof(send_buf));
+                    broadcast_bytes(send_buf, send_len, ctx);
+                    break;
+                }
+                case MSG_SET_TARGET:
+                {
+                    set_target_message_t *msg = (set_target_message_t *)generic_msg;
+                    if (msg->x < 0) msg->x = 0;
+                    else if (msg->x > FIELD_WIDTH) msg->x = FIELD_WIDTH;
+                    if (msg->y < 0) msg->y = 0;
+                    else if (msg->y > FIELD_HEIGHT) msg->y = FIELD_HEIGHT;
+                    player->target.x = msg->x;
+                    player->target.y = msg->y;
+                    break;
+                }
             }
         }
 
