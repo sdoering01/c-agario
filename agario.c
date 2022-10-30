@@ -276,7 +276,41 @@ static void handle_player_message(uint8_t *recv_buf, uint16_t recv_len, player_t
 }
 
 static void tick(context_t *ctx) {
-    // TODO: Implement tick logic
+    uint8_t send_buf[65535];
+    int send_len;
+
+    for (int i = 0; i < MAX_PLAYERS; i++) {
+        player_t *player = ctx->players[i];
+        if (player) {
+            vec2_t diff = vec2_sub(player->target, player->pos);
+            if (vec2_abs(diff) > 1) {
+                player->pos = vec2_add(player->pos, vec2_scale(vec2_norm(diff), 0.5));
+            }
+            printf("player %d: (%.1f, %.1f)\n", player->id, player->pos.x, player->pos.y);
+        }
+    }
+
+    // TODO: Add eat logic
+
+    int player_count = get_player_count(ctx);
+    int player_idx = 0;
+    player_positions_message_t player_pos_msg = {};
+    player_pos_msg.message_type = MSG_PLAYER_POSITIONS;
+    player_pos_msg.player_count = player_count;
+    player_pos_msg.player_positions = calloc(player_count, sizeof(player_position_t));
+    for (int i = 0; i < MAX_PLAYERS; i++) {
+        player_t *player = ctx->players[i];
+        if (player) {
+            player_pos_msg.player_positions[player_idx].player_id = player->id;
+            player_pos_msg.player_positions[player_idx].x = player->pos.x;
+            player_pos_msg.player_positions[player_idx].y = player->pos.y;
+            player_pos_msg.player_positions[player_idx].mass = player->mass;
+            player_idx++;
+        }
+    }
+    send_len = serialize_message((generic_message_t *)&player_pos_msg, send_buf, sizeof(send_buf));
+    broadcast_bytes(send_buf, send_len, ctx);
+    free(player_pos_msg.player_positions);
 }
 
 int main(void) {
