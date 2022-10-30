@@ -23,8 +23,6 @@
 
 #define START_MASS 10
 
-static char *too_many_connections_message = "too_many_connections";
-
 // TODO: Add way to disconnect players that don't join in time to prevent denial
 // of service attacks
 typedef struct player_t {
@@ -104,8 +102,19 @@ static int connect_player(int sock, context_t *ctx) {
 
     if (idx == MAX_PLAYERS) {
         printf("player tried to connect while game was full\n");
-        // TODO: Swap for binary error message once protocol is established
-        send_all(sock, (uint8_t *)too_many_connections_message, strlen(too_many_connections_message));
+
+        join_error_message_t join_error_msg = {};
+        join_error_msg.message_type = MSG_JOIN_ERROR;
+        join_error_msg.error_code = JOIN_ERR_GAME_FULL;
+        join_error_msg.error_message_length = strlen(GAME_FULL_ERROR_MSG);
+        join_error_msg.error_message = GAME_FULL_ERROR_MSG;
+
+        uint8_t send_buf[65535] = {};
+        int send_len = serialize_message((generic_message_t *)&join_error_msg, send_buf, sizeof(send_buf));
+        if (send_len > 0) {
+            send_all(sock, send_buf, send_len);
+        }
+
         close(sock);
         return -1;
     }

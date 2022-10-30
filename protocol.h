@@ -114,6 +114,7 @@ typedef struct eaten_food_message_t {
 
 #define MSG_JOIN_ERROR 40
 #define JOIN_ERR_GAME_FULL 1
+#define GAME_FULL_ERROR_MSG "The game is full"
 typedef struct join_error_message_t {
     uint8_t message_type;
     uint8_t error_code;
