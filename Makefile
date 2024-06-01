@@ -16,7 +16,7 @@ TEST_TARGETS = test/test_protocol
 #  - Add binary to .gitignore
 
 %.o: %.c $(HEADERS)
-	gcc $(CFLAGS) $< -c
+	gcc $(CFLAGS) $< -c -o $@
 
 $(TARGET): $(OBJECTS)
 	gcc $(OBJECTS) -o $(TARGET) $(LINK_FLAGS)
