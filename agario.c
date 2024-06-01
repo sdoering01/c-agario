@@ -431,9 +431,9 @@ int main(void) {
             } else {
                 player_t *player = events[i].data.ptr;
                 printf("player socket ready: %d\n", player->sock);
-                // TODO: Buffer the data in a player-specific buffer or try to
-                // peek the data and look if we can read enough data to get a
-                // message.
+                // TODO: First read the message header in a non-blocking way to
+                // determine the message size (e.g. when only one byte is
+                // available but we try reading two bytes, it would block)
                 bytes_received = recv(player->sock, client_message, sizeof(client_message), 0);
                 // Be careful when handling errno, because calls to printf can overwrite it
                 if (bytes_received == -1 && errno != EINTR) {
