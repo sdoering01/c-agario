@@ -3,12 +3,9 @@
 #include <string.h>
 #include <unistd.h>
 #include <arpa/inet.h>
-#include <sys/socket.h>
-#include <sys/epoll.h>
-#include <sys/timerfd.h>
+#include <sys/event.h>
 #include <errno.h>
-#include <signal.h>
-#include <time.h>
+#include <sys/time.h>
 #include <stdbool.h>
 
 #include "geometry.h"
@@ -37,7 +34,7 @@ typedef struct player_t {
 } player_t;
 
 typedef struct context_t {
-    int epoll_fd;
+    int kq;
     int next_player_id;
     player_t *players[MAX_PLAYERS];
 } context_t;
@@ -93,7 +90,7 @@ static int send_all(int sock, uint8_t *msg, int msg_len) {
 }
 
 static int connect_player(int sock, context_t *ctx) {
-    struct epoll_event event = {};
+    struct kevent change = {};
     int ret, idx = 0;
 
     while (idx < MAX_PLAYERS && ctx->players[idx]) {
@@ -121,11 +118,10 @@ static int connect_player(int sock, context_t *ctx) {
 
     player_t *player = player_new(sock);
 
-    event.events = EPOLLIN;
-    event.data.ptr = player;
-    ret = epoll_ctl(ctx->epoll_fd, EPOLL_CTL_ADD, sock, &event);
+    EV_SET(&change, sock, EVFILT_READ, EV_ADD, 0, 0, player);
+    ret = kevent(ctx->kq, &change, 1, NULL, 0, NULL);
     if (ret == -1) {
-        printf("Error adding player socket to epoll instance, closing socket\n");
+        perror("adding player to kqueue failed, closing socket");
         player_free(player);
         close(sock);
     } else {
@@ -136,6 +132,8 @@ static int connect_player(int sock, context_t *ctx) {
 }
 
 static void disconnect_player(player_t *player, context_t *ctx) {
+    struct kevent change = {};
+
     int idx = 0;
     while (idx < MAX_PLAYERS && ctx->players[idx] != player) {
         idx++;
@@ -143,7 +141,8 @@ static void disconnect_player(player_t *player, context_t *ctx) {
 
     if (idx < MAX_PLAYERS) {
         // TODO: Send message to client so it knows the disconnect isn't abnormal
-        epoll_ctl(ctx->epoll_fd, EPOLL_CTL_DEL, player->sock, NULL);
+        EV_SET(&change, player->sock, EVFILT_READ, EV_DELETE, 0, 0, NULL);
+        kevent(ctx->kq, &change, 1, NULL, 0, NULL);
         close(player->sock);
         player_free(player);
         ctx->players[idx] = NULL;
@@ -314,13 +313,14 @@ static void tick(context_t *ctx) {
 }
 
 int main(void) {
-    int server_sock, client_sock, epoll_fd, timer_fd, running = 1, event_count, i;
-    uint64_t tick_count;
+    int server_sock, client_sock, kq, running = 1, event_count, i;
     struct sockaddr_in server_addr;
     uint8_t client_message[2000] = {};
     ssize_t bytes_received;
-    struct epoll_event event = {}, events[MAX_EVENTS] = {};
-    struct itimerspec interval = {};
+    struct kevent change = {}, events[MAX_EVENTS] = {};
+    struct timespec timeout = {};
+    long tick_nsec = 1e9 / TICKS_PER_SEC;
+    struct timeval last_tick_time, now, time_delta;
     context_t ctx = {};
 
     // Ignore SIGPIPE signal, which would cause a process exit when we try to
@@ -360,57 +360,49 @@ int main(void) {
     }
     printf("Listening for incoming connections...\n");
 
-    timer_fd = timerfd_create(CLOCK_MONOTONIC, 0);
-    if (timer_fd == -1) {
-        printf("Error creating timerfd\n");
+    kq = kqueue();
+    if (kq == -1) {
+        perror("creating kqueue failed");
         close(server_sock);
+        return 1;
+    }
+    ctx.kq = kq;
+
+
+    EV_SET(&change, server_sock, EVFILT_READ, EV_ADD, 0, 0, NULL);
+    if (kevent(kq, &change, 1, NULL, 0, NULL) == -1) {
+        perror("adding server socket to kqueue failed");
+        close(server_sock);
+        close(kq);
         return 1;
     }
 
-    interval.it_value.tv_sec = 0;
-    interval.it_value.tv_nsec = 1e9 / TICKS_PER_SEC;
-    interval.it_interval = interval.it_value;
-    if (timerfd_settime(timer_fd, 0, &interval, NULL) == -1) {
-        printf("Error configuring timerfd interval\n");
-        close(server_sock);
-        close(timer_fd);
-        return 1;
-    }
+    timeout.tv_sec = 0;
+    timeout.tv_nsec = tick_nsec;
 
-    epoll_fd = epoll_create1(0);
-    if (epoll_fd == -1) {
-        printf("Error creating epoll instance\n");
-        close(server_sock);
-        close(timer_fd);
-        return 1;
-    }
-    ctx.epoll_fd = epoll_fd;
-
-    event.events = EPOLLIN;
-    event.data.ptr = NULL;
-    if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, server_sock, &event) == -1) {
-        printf("Error adding server_sock to epoll instance\n");
-        close(server_sock);
-        close(timer_fd);
-        close(epoll_fd);
-        return 1;
-    }
-
-    event.events = EPOLLIN;
-    event.data.u64 = 1;
-    if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, timer_fd, &event) == -1) {
-        printf("Error adding the timer_fd to epoll instance\n");
-        close(server_sock);
-        close(timer_fd);
-        close(epoll_fd);
-        return 1;
-    }
+    gettimeofday(&now, 0);
+    last_tick_time = now;
 
     while (running) {
-        event_count = epoll_wait(epoll_fd, events, MAX_EVENTS, -1);
+        event_count = kevent(kq, NULL, 0, events, MAX_EVENTS, &timeout);
+        if (event_count < 0) {
+            if (errno == EINTR) {
+                continue;
+            }
+            perror("waiting for kqueue events failed");
+            return 1;
+        }
+
+        // This could be non-optimal for performance
+        gettimeofday(&now, 0);
+        timersub(&now, &last_tick_time, &time_delta);
+        if (time_delta.tv_sec > 0 || time_delta.tv_usec * 1000 > tick_nsec) {
+            last_tick_time = now;
+            tick(&ctx);
+        }
+
         for (i = 0; i < event_count; i++) {
-            // The server socket doesn't have data associated with it in epoll
-            if (!events[i].data.ptr) {
+            if (events[i].ident == server_sock) {
                 client_sock = accept(server_sock, NULL, NULL);
                 printf("got client_sock: %d\n", client_sock);
                 if (client_sock < 0) {
@@ -421,15 +413,8 @@ int main(void) {
                     // In case something gets added after the if statement later
                     continue;
                 }
-            } else if (events[i].data.u64 == 1) {
-                read(timer_fd, &tick_count, 8);
-                if (tick_count > 1) {
-                    printf("warning: missed %ld ticks\n", tick_count - 1);
-                }
-                tick(&ctx);
-                // TODO: Send updates to clients
             } else {
-                player_t *player = events[i].data.ptr;
+                player_t *player = (player_t *)events[i].udata;
                 printf("player socket ready: %d\n", player->sock);
                 // TODO: First read the message header in a non-blocking way to
                 // determine the message size (e.g. when only one byte is
@@ -459,8 +444,7 @@ int main(void) {
         }
     }
     close(server_sock);
-    close(timer_fd);
-    close(epoll_fd);
+    close(kq);
 
     return 0;
 }
