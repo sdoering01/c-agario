@@ -351,7 +351,7 @@ int main(void) {
         close(server_sock);
         return 1;
     }
-    printf("Binded the socket\n");
+    printf("Bound the socket\n");
 
     if (listen(server_sock, 0) == -1) {
         printf("Error while listening\n");
