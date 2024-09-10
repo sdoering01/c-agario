@@ -7,11 +7,15 @@
 #include <stdio.h>
 
 static uint16_t deserialize_uint16_t(uint8_t *buf) {
-    return ntohs(*(uint16_t *)buf);
+    uint16_t network_num;
+    memcpy(&network_num, buf, 2);
+    return ntohs(network_num);
 }
 
 static uint32_t deserialize_uint32_t(uint8_t *buf) {
-    return ntohl(*(uint32_t *)buf);
+    uint32_t network_num;
+    memcpy(&network_num, buf, 4);
+    return ntohl(network_num);
 }
 
 static float deserialize_float(uint8_t *buf) {
@@ -34,12 +38,14 @@ static uint8_t *serialize_uint8_t(uint8_t *buf, uint8_t num) {
 }
 
 static uint8_t *serialize_uint16_t(uint8_t *buf, uint16_t num) {
-    *(uint16_t *)buf = htons(num);
+    uint16_t network_num = htons(num);
+    memcpy(buf, &network_num, 2);
     return buf + 2;
 }
 
 static uint8_t *serialize_uint32_t(uint8_t *buf, uint32_t num) {
-    *(uint32_t *)buf = htonl(num);
+    uint32_t network_num = htonl(num);
+    memcpy(buf, &network_num, 4);
     return buf + 4;
 }
 
