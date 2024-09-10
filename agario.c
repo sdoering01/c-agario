@@ -320,7 +320,6 @@ int main(void) {
     struct kevent change = {}, events[MAX_EVENTS] = {};
     struct timespec timeout = {};
     long tick_nsec = 1e9 / TICKS_PER_SEC;
-    struct timeval last_tick_time, now, time_delta;
     context_t ctx = {};
 
     // Ignore SIGPIPE signal, which would cause a process exit when we try to
@@ -377,11 +376,14 @@ int main(void) {
         return 1;
     }
 
-    timeout.tv_sec = 0;
-    timeout.tv_nsec = tick_nsec;
-
-    gettimeofday(&now, 0);
-    last_tick_time = now;
+    uintptr_t timer_ident = -1;
+    EV_SET(&change, timer_ident, EVFILT_TIMER, EV_ADD, NOTE_NSECONDS | NOTE_CRITICAL, tick_nsec, NULL);
+    if (kevent(kq, &change, 1, NULL, 0, NULL) == -1) {
+        perror("adding timer event to kqueue failed");
+        close(server_sock);
+        close(kq);
+        return 1;
+    }
 
     while (running) {
         event_count = kevent(kq, NULL, 0, events, MAX_EVENTS, &timeout);
@@ -393,16 +395,12 @@ int main(void) {
             return 1;
         }
 
-        // This could be non-optimal for performance
-        gettimeofday(&now, 0);
-        timersub(&now, &last_tick_time, &time_delta);
-        if (time_delta.tv_sec > 0 || time_delta.tv_usec * 1000 > tick_nsec) {
-            last_tick_time = now;
-            tick(&ctx);
-        }
-
         for (i = 0; i < event_count; i++) {
-            if (events[i].ident == server_sock) {
+            if (events[i].filter == EVFILT_TIMER && events[i].ident == timer_ident) {
+                for (int ticks = events[i].data; ticks > 0; ticks--) {
+                    tick(&ctx);
+                }
+            } else if (events[i].ident == server_sock) {
                 client_sock = accept(server_sock, NULL, NULL);
                 printf("got client_sock: %d\n", client_sock);
                 if (client_sock < 0) {
