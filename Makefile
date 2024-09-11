@@ -1,8 +1,16 @@
-TARGET = agario
-OBJECTS = agario.o geometry.o protocol.o
-HEADERS = geometry.h protocol.h
+SERVER_TARGET = agario
+SERVER_OBJECTS = agario.o geometry.o protocol.o networking.o
+
+GUI_TARGET = gui
+GUI_OBJECTS = gui.o protocol.o networking.o
+
+HEADERS = geometry.h protocol.h networking.h
+
 CFLAGS = -Wall -O2
+GUI_CFLAGS = $(CFLAGS) `pkg-config --cflags raylib`
+
 LINK_FLAGS = -lm
+GUI_LINK_FLAGS = $(LINK_FLAGS) `pkg-config --libs raylib`
 
 UNITY_SRC = test/unity/unity.c
 UNITY_HEADERS = test/unity/unity.h test/unity/unity_internals.h
@@ -15,11 +23,17 @@ TEST_TARGETS = test/test_protocol
 #  - call the test binary in the test recipe
 #  - Add binary to .gitignore
 
+gui.o: gui.c $(HEADERS)
+	gcc $(GUI_CFLAGS) $< -c -o $@
+
 %.o: %.c $(HEADERS)
 	gcc $(CFLAGS) $< -c -o $@
 
-$(TARGET): $(OBJECTS)
-	gcc $(OBJECTS) -o $(TARGET) $(LINK_FLAGS)
+$(SERVER_TARGET): $(SERVER_OBJECTS)
+	gcc $(SERVER_OBJECTS) -o $(SERVER_TARGET) $(LINK_FLAGS)
+
+$(GUI_TARGET): $(GUI_OBJECTS)
+	gcc $(GUI_OBJECTS) -o $(GUI_TARGET) $(GUI_LINK_FLAGS)
 
 $(UNITY_OBJ): $(UNITY_SRC) $(UNITY_HEADERS)
 	gcc $(CFLAGS) $< -c -o $@
@@ -30,12 +44,15 @@ test/%.o: test/%.c $(HEADERS)
 test/test_protocol: test/test_protocol.o protocol.o $(UNITY_OBJ)
 	gcc $^ -o $@ $(LINK_FLAGS)
 
-all: $(TARGET)
+compile_flags.txt: generate_compile_flags.sh
+	./generate_compile_flags.sh
+
+all: $(SERVER_TARGET) $(GUI_TARGET) compile_flags.txt
 
 test: $(TEST_TARGETS)
 	./test/test_protocol
 
 clean:
-	rm -f $(OBJECTS) $(TARGET) $(UNITY_OBJ) test/*.o $(TEST_TARGETS)
+	rm -f $(SERVER_OBJECTS) $(SERVER_TARGET) $(GUI_OBJECTS) $(GUI_TARGET) $(UNITY_OBJ) test/*.o $(TEST_TARGETS)
 
 .PHONY: all test clean

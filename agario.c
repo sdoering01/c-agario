@@ -10,6 +10,7 @@
 
 #include "geometry.h"
 #include "protocol.h"
+#include "networking.h"
 
 #define MAX_EVENTS 5
 #define MAX_PLAYERS 64
@@ -71,22 +72,6 @@ static int get_player_count(context_t *ctx) {
         }
     }
     return count;
-}
-
-static int send_all(int sock, uint8_t *msg, int msg_len) {
-    int sent;
-    while (msg_len > 0) {
-        sent = send(sock, msg, msg_len, 0);
-        if (sent == -1) {
-            if (errno == EINTR) {
-                continue;
-            }
-            return -1;
-        }
-        msg += sent;
-        msg_len -= sent;
-    }
-    return 0;
 }
 
 static int connect_player(int sock, context_t *ctx) {
