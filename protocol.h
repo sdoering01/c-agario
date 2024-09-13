@@ -129,8 +129,18 @@ typedef struct kick_message_t {
     char *reason;
 } kick_message_t;
 
-// Returns a pointer to a generic_message_t if the deserialization was successful, or else NULL
-generic_message_t *deserialize_message(uint8_t *buf, uint16_t len);
+/*
+ * Deserializes a message from the given buffer and stores it at `*generic_msg`.
+ *
+ * Returns the amount of bytes that were read from the buffer on success, and 0
+ * on error. In the error case, `*generic_msg` is left untouched.
+ *
+ * Trying to deserialize a message from a buffer that does not contain a message
+ * or only part of a message, is treated as an error.
+ *
+ * Note: The caller should free the message and its contents.
+ */
+int deserialize_message(uint8_t *buf, uint16_t len, generic_message_t **generic_msg);
 int serialize_message(generic_message_t *msg, uint8_t *buf, uint16_t buf_len);
 void message_free(generic_message_t *msg);
 

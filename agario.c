@@ -186,8 +186,10 @@ static void broadcast_bytes(uint8_t *buf, int buf_len, context_t *ctx) {
 static void handle_player_message(uint8_t *recv_buf, uint16_t recv_len, player_t *player, context_t *ctx) {
     uint8_t send_buf[65535];
     int send_len;
+    generic_message_t *generic_msg = NULL;
 
-    generic_message_t *generic_msg = deserialize_message(recv_buf, recv_len);
+    // TODO: Use returned len
+    (void) deserialize_message(recv_buf, recv_len, &generic_msg);
     if (generic_msg) {
         if (!player->joined && generic_msg->message_type == MSG_JOIN) {
             join_player(player, (join_message_t *)generic_msg, ctx);

@@ -289,12 +289,11 @@ static int serialized_message_length(generic_message_t *generic_msg) {
     return len;
 }
 
-generic_message_t *deserialize_message(uint8_t *buf, uint16_t len) {
-    generic_message_t *generic_msg;
+int deserialize_message(uint8_t *buf, uint16_t len, generic_message_t **generic_msg) {
     uint8_t message_type, *payload;
 
     if (!is_valid_serialized_message(buf, len)) {
-        return NULL;
+        return 0;
     }
 
     message_type = buf[2];
@@ -306,7 +305,7 @@ generic_message_t *deserialize_message(uint8_t *buf, uint16_t len) {
             join_message_t *msg = malloc(sizeof(join_message_t));
             msg->name_length = payload[0];
             msg->name = deserialize_string(payload + 1, msg->name_length);
-            generic_msg = (generic_message_t *)msg;
+            *generic_msg = (generic_message_t *)msg;
             break;
         }
 
@@ -315,14 +314,14 @@ generic_message_t *deserialize_message(uint8_t *buf, uint16_t len) {
             rejoin_message_t *msg = malloc(sizeof(rejoin_message_t));
             msg->player_id = deserialize_uint32_t(payload);
             memcpy(msg->rejoin_token, payload + 4, REJOIN_TOKEN_LEN);
-            generic_msg = (generic_message_t *)msg;
+            *generic_msg = (generic_message_t *)msg;
             break;
         }
 
         case MSG_LEAVE:
         {
             leave_message_t *msg = malloc(sizeof(leave_message_t));
-            generic_msg = (generic_message_t *)msg;
+            *generic_msg = (generic_message_t *)msg;
             break;
         }
 
@@ -331,7 +330,7 @@ generic_message_t *deserialize_message(uint8_t *buf, uint16_t len) {
             set_target_message_t *msg = malloc(sizeof(set_target_message_t));
             msg->x = deserialize_float(payload);
             msg->y = deserialize_float(payload + 4);
-            generic_msg = (generic_message_t *)msg;
+            *generic_msg = (generic_message_t *)msg;
             break;
         }
 
@@ -340,7 +339,7 @@ generic_message_t *deserialize_message(uint8_t *buf, uint16_t len) {
             join_ack_message_t *msg = malloc(sizeof(join_ack_message_t));
             msg->player_id = deserialize_uint32_t(payload);
             memcpy(msg->rejoin_token, payload + 4, REJOIN_TOKEN_LEN);
-            generic_msg = (generic_message_t *)msg;
+            *generic_msg = (generic_message_t *)msg;
             break;
         }
 
@@ -361,7 +360,7 @@ generic_message_t *deserialize_message(uint8_t *buf, uint16_t len) {
                 }
             }
             msg->player_infos = player_infos;
-            generic_msg = (generic_message_t *)msg;
+            *generic_msg = (generic_message_t *)msg;
             break;
         }
 
@@ -371,7 +370,7 @@ generic_message_t *deserialize_message(uint8_t *buf, uint16_t len) {
             msg->player_info.player_id = deserialize_uint32_t(payload);
             msg->player_info.name_length = payload[4];
             msg->player_info.name = deserialize_string(payload + 5, msg->player_info.name_length);
-            generic_msg = (generic_message_t *)msg;
+            *generic_msg = (generic_message_t *)msg;
             break;
         }
 
@@ -379,7 +378,7 @@ generic_message_t *deserialize_message(uint8_t *buf, uint16_t len) {
         {
             player_leave_message_t *msg = malloc(sizeof(player_leave_message_t));
             msg->player_id = deserialize_uint32_t(payload);
-            generic_msg = (generic_message_t *)msg;
+            *generic_msg = (generic_message_t *)msg;
             break;
         }
 
@@ -401,7 +400,7 @@ generic_message_t *deserialize_message(uint8_t *buf, uint16_t len) {
                 }
             }
             msg->player_positions = player_positions;
-            generic_msg = (generic_message_t *)msg;
+            *generic_msg = (generic_message_t *)msg;
             break;
         }
 
@@ -422,7 +421,7 @@ generic_message_t *deserialize_message(uint8_t *buf, uint16_t len) {
                 }
             }
             msg->food_positions = food_positions;
-            generic_msg = (generic_message_t *)msg;
+            *generic_msg = (generic_message_t *)msg;
             break;
         }
 
@@ -441,7 +440,7 @@ generic_message_t *deserialize_message(uint8_t *buf, uint16_t len) {
                 }
             }
             msg->food_ids = food_ids;
-            generic_msg = (generic_message_t *)msg;
+            *generic_msg = (generic_message_t *)msg;
             break;
         }
 
@@ -451,7 +450,7 @@ generic_message_t *deserialize_message(uint8_t *buf, uint16_t len) {
             msg->error_code = payload[0];
             msg->error_message_length = payload[1];
             msg->error_message = deserialize_string(payload + 2, msg->error_message_length);
-            generic_msg = (generic_message_t *)msg;
+            *generic_msg = (generic_message_t *)msg;
             break;
         }
 
@@ -460,16 +459,19 @@ generic_message_t *deserialize_message(uint8_t *buf, uint16_t len) {
             kick_message_t *msg = malloc(sizeof(kick_message_t));
             msg->reason_length = payload[0];
             msg->reason = deserialize_string(payload + 1, msg->reason_length);
-            generic_msg = (generic_message_t *)msg;
+            *generic_msg = (generic_message_t *)msg;
             break;
         }
 
         default:
-            return NULL;
+            return 0;
     }
 
-    generic_msg->message_type = message_type;
-    return generic_msg;
+    (*generic_msg)->message_type = message_type;
+
+    // Could be optimized a little further, but this way we only have the length
+    // calculation in one place, which is more robust
+    return serialized_message_length(*generic_msg);
 }
 
 int serialize_message(generic_message_t *generic_msg, uint8_t *buf, uint16_t buf_len) {
