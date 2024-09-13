@@ -23,6 +23,13 @@
 #define STATE_ENTER_NAME 1
 #define STATE_INGAME 2
 
+typedef struct player_state_t {
+    int id;
+    int mass;
+    char *name;
+    Vector2 pos;
+} player_state_t;
+
 void draw_fps(void) {
     char fps_str[8] = {0};
     int fps_font_size = 12;
@@ -51,8 +58,11 @@ int main(void) {
     rejoin_token_t rejoin_token = {0};
     uint32_t own_player_id = 0;
     // Start the position outside of the field
-    Vector2 own_display_position = {-1e6, -1e6};
     Vector2 previous_display_target = {-1, -1};
+
+    // TODO: Get the max players from the server
+    #define MAX_PLAYERS 64
+    player_state_t player_states[MAX_PLAYERS] = {0};
 
     // TODO: Get the field size from server
     float field_to_window_scale_factor = (float)(WINDOW_WIDTH) / 1000.0;
@@ -130,7 +140,8 @@ int main(void) {
                         send_all(sock, send_buf, msg_len);
 
                         int got_join_ack = 0;
-                        while (!got_join_ack) {
+                        int got_current_players = 0;
+                        while (!got_join_ack || !got_current_players) {
                             int space_in_buffer = RECV_BUF_LEN - recv_buf_idx;
                             n_bytes = recv(sock, recv_buf + recv_buf_idx, space_in_buffer, 0);
 
@@ -172,6 +183,26 @@ int main(void) {
                                         TraceLog(LOG_INFO, "Joined game with player id %d", own_player_id);
 
                                         got_join_ack = 1;
+                                    } else if (generic_msg->message_type == MSG_CURRENT_PLAYERS) {
+                                        current_players_message_t *current_players_msg = (current_players_message_t *)generic_msg;
+
+                                        for (int player_idx = 0; player_idx < current_players_msg->player_count; player_idx++) {
+                                            player_info_t player_info = current_players_msg->player_infos[player_idx];
+
+                                            if (player_idx >= MAX_PLAYERS) {
+                                                TraceLog(LOG_WARNING, "Player list of server contains more players than the player limit");
+                                                break;
+                                            }
+
+                                            player_states[player_idx].id = player_info.player_id;
+                                            player_states[player_idx].name = player_info.name;
+                                            // Take complete ownership of the allocated string, so that is is not free'd later
+                                            player_info.name = NULL;
+                                            player_states[player_idx].pos = (Vector2){-1, -1};
+                                            player_states[player_idx].mass = -1;
+                                        }
+
+                                        got_current_players = 1;
                                     }
 
                                     // TODO: Read current players message
@@ -235,10 +266,13 @@ int main(void) {
                             player_positions_message_t *player_positions_msg = (player_positions_message_t *)generic_msg;
                             for (int player_idx = 0; player_idx < player_positions_msg->player_count; player_idx++) {
                                 player_position_t player_pos = player_positions_msg->player_positions[player_idx];
-                                if (player_pos.player_id == own_player_id) {
 
-                                    own_display_position.x = player_pos.x * field_to_window_scale_factor;
-                                    own_display_position.y = player_pos.y * field_to_window_scale_factor;
+                                // TODO: Implement more efficient data structure for this!!
+                                for (int i = 0; i < MAX_PLAYERS; i++) {
+                                    if (player_states[i].id == player_pos.player_id) {
+                                        player_states[i].pos = (Vector2){player_pos.x, player_pos.y};
+                                        player_states[i].mass = player_pos.mass;
+                                    }
                                 }
                             }
                         }
@@ -265,9 +299,13 @@ int main(void) {
 
                 DrawText("Welcome to AgarIO", 0, 0, 24, WHITE);
 
-                // TODO: Show other players
-
-                DrawCircleV(own_display_position, 50, WHITE);
+                for (int i = 0; i < MAX_PLAYERS; i++) {
+                    if (player_states[i].mass != 0) {
+                        Color color = player_states[i].id == own_player_id ? DARKBLUE : RED;
+                        Vector2 window_pos = Vector2Scale(player_states[i].pos, field_to_window_scale_factor);
+                        DrawCircleV(window_pos, 50, color);
+                    }
+                }
 
                 break;
             }
