@@ -12,6 +12,7 @@
 
 #include "protocol.h"
 #include "networking.h"
+#include "raymath.h"
 
 #define SEND_BUF_LEN 65535
 #define RECV_BUF_LEN 65535
@@ -51,6 +52,7 @@ int main(void) {
     uint32_t own_player_id = 0;
     // Start the position outside of the field
     Vector2 own_display_position = {-1e6, -1e6};
+    Vector2 previous_display_target = {-1, -1};
 
     // TODO: Get the field size from server
     float field_to_window_scale_factor = (float)(WINDOW_WIDTH) / 1000.0;
@@ -247,19 +249,18 @@ int main(void) {
 
                 Vector2 mouse_pos = GetMousePosition();
                 int is_inside_window = mouse_pos.x >= 0 && mouse_pos.x <= WINDOW_WIDTH && mouse_pos.y >= 0 && mouse_pos.y <= WINDOW_HEIGHT;
-                if (is_inside_window) {
-                    // TODO: Only do this, if the target has changed -- no need to send the same target all the time
-
+                if (is_inside_window && !Vector2Equals(previous_display_target, mouse_pos)) {
                     set_target_message_t set_target_msg = {
                         .message_type = MSG_SET_TARGET,
                         .x = mouse_pos.x * window_to_field_scale_factor,
                         .y = mouse_pos.y * window_to_field_scale_factor,
                     };
 
-
                     int msg_len = serialize_message((generic_message_t *)&set_target_msg, send_buf, SEND_BUF_LEN);
                     // TODO: Handle error
                     send_all(sock, send_buf, msg_len);
+
+                    previous_display_target = mouse_pos;
                 }
 
                 DrawText("Welcome to AgarIO", 0, 0, 24, WHITE);
