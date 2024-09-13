@@ -40,6 +40,10 @@ typedef struct context_t {
     player_t *players[MAX_PLAYERS];
 } context_t;
 
+// TODO: Is there a way to handle this better? Putting it into a header would
+// make it look like this is a public function.
+static void broadcast_bytes(uint8_t *buf, int buf_len, context_t *ctx);
+
 static vec2_t generate_player_pos() {
     float x = rand() % FIELD_WIDTH;
     float y = rand() % FIELD_HEIGHT;
@@ -125,12 +129,28 @@ static void disconnect_player(player_t *player, context_t *ctx) {
     }
 
     if (idx < MAX_PLAYERS) {
-        // TODO: Send message to client so it knows the disconnect isn't abnormal
         EV_SET(&change, player->sock, EVFILT_READ, EV_DELETE, 0, 0, NULL);
         kevent(ctx->kq, &change, 1, NULL, 0, NULL);
-        close(player->sock);
-        player_free(player);
+
+        // This has to happen before broadcasting the player leave message,
+        // otherwise an infinite loop is created, if sending to the player
+        // fails.
         ctx->players[idx] = NULL;
+
+        if (player->joined) {
+            uint8_t send_buf[64] = {0};
+            player_leave_message_t player_leave_msg = {
+                .message_type = MSG_PLAYER_LEAVE,
+                .player_id = player->id,
+            };
+            int send_len = serialize_message((generic_message_t *)&player_leave_msg, send_buf, sizeof(send_buf));
+            broadcast_bytes(send_buf, send_len, ctx);
+        }
+
+        // TODO: Send message to client so it knows the disconnect isn't abnormal, but explicitly performed by server
+        close(player->sock);
+
+        player_free(player);
     } else {
         printf("tried to disconnect player that wasn't in player list\n");
     }
@@ -234,13 +254,7 @@ static void handle_player_message(uint8_t *recv_buf, uint16_t recv_len, player_t
             switch (generic_msg->message_type) {
                 case MSG_LEAVE:
                 {
-                    player_leave_message_t player_leave_msg = {};
-                    player_leave_msg.message_type = MSG_PLAYER_LEAVE;
-                    player_leave_msg.player_id = player->id;
                     disconnect_player(player, ctx);
-                    send_len = serialize_message(
-                            (generic_message_t *)&player_leave_msg, send_buf, sizeof(send_buf));
-                    broadcast_bytes(send_buf, send_len, ctx);
                     break;
                 }
                 case MSG_SET_TARGET:
