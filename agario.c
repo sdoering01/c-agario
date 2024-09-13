@@ -321,7 +321,7 @@ int main(void) {
     struct kevent change = {}, events[MAX_EVENTS] = {};
     struct timespec timeout = {};
     long tick_nsec = 1e9 / TICKS_PER_SEC;
-    context_t ctx = {};
+    context_t ctx = { .next_player_id = 1 };
 
     // Ignore SIGPIPE signal, which would cause a process exit when we try to
     // send or receive on a broken stream

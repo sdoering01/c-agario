@@ -21,7 +21,8 @@
 #define WINDOW_HEIGHT 600
 
 #define STATE_ENTER_NAME 1
-#define STATE_INGAME 2
+#define STATE_JOINING 2
+#define STATE_INGAME 3
 
 typedef struct player_state_t {
     int id;
@@ -106,11 +107,133 @@ int main(void) {
     char player_name[MAX_PLAYER_NAME_LEN + 1] = {0};
     int player_name_chars = 0;
 
+    int got_join_ack = 0;
+    int got_current_players = 0;
+
 	while (!WindowShouldClose())
 	{
 		BeginDrawing();
 
 		ClearBackground(BLACK);
+
+
+        // Networking
+        {
+            int space_in_buffer = RECV_BUF_LEN - recv_buf_idx;
+            n_bytes = recv(sock, recv_buf + recv_buf_idx, space_in_buffer, 0);
+
+            if (n_bytes == -1) {
+                if (errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR) {
+                    TraceLog(LOG_WARNING, "Error receiving from socket: %s", strerror(errno));
+                }
+            } else if (n_bytes == 0) {
+                // TODO: Handle this better
+                TraceLog(LOG_WARNING, "Server closed connection -- quitting");
+                CloseWindow();
+                return 1;
+            } else {
+                recv_buf_idx += n_bytes;
+
+                generic_message_t *generic_msg = NULL;
+                int msg_bytes = deserialize_message(recv_buf, recv_buf_idx, &generic_msg);
+
+                if (generic_msg) {
+                    assert(msg_bytes <= recv_buf_idx);
+
+                    int bytes_left_in_buffer = recv_buf_idx - msg_bytes;
+
+                    // Move the rest of the buffer over
+                    memmove(recv_buf, recv_buf + msg_bytes, bytes_left_in_buffer);
+                    recv_buf_idx = bytes_left_in_buffer;
+
+                    // Zero the rest of the buffer just to be safe.
+                    // This is just overhead if everything works as expected.
+                    memset(recv_buf + bytes_left_in_buffer, 0, msg_bytes);
+
+                    if (generic_msg->message_type == MSG_JOIN_ACK) {
+                        join_ack_message_t *join_ack_msg = (join_ack_message_t *)generic_msg;
+                        memcpy(rejoin_token, join_ack_msg->rejoin_token, REJOIN_TOKEN_LEN);
+                        own_player_id = join_ack_msg->player_id;
+
+                        TraceLog(LOG_INFO, "Joined game with player id %d", own_player_id);
+
+                        got_join_ack = 1;
+                    } else if (generic_msg->message_type == MSG_CURRENT_PLAYERS) {
+                        current_players_message_t *current_players_msg = (current_players_message_t *)generic_msg;
+
+                        for (int player_idx = 0; player_idx < current_players_msg->player_count; player_idx++) {
+                            player_info_t player_info = current_players_msg->player_infos[player_idx];
+
+                            if (player_idx >= MAX_PLAYERS) {
+                                TraceLog(LOG_WARNING, "Player list of server contains more players than the player limit");
+                                break;
+                            }
+
+                            player_states[player_idx].id = player_info.player_id;
+                            player_states[player_idx].name = player_info.name;
+                            // Prevent freeing the name later
+                            player_info.name = NULL;
+                            player_states[player_idx].pos = (Vector2){-1, -1};
+                            player_states[player_idx].mass = -1;
+                        }
+
+                        got_current_players = 1;
+                    } else if (generic_msg->message_type == MSG_PLAYER_POSITIONS) {
+                        player_positions_message_t *player_positions_msg = (player_positions_message_t *)generic_msg;
+                        for (int player_idx = 0; player_idx < player_positions_msg->player_count; player_idx++) {
+                            player_position_t player_pos = player_positions_msg->player_positions[player_idx];
+
+                            // TODO: Implement more efficient data structure for this!!
+                            for (int i = 0; i < MAX_PLAYERS; i++) {
+                                if (player_states[i].id == player_pos.player_id) {
+                                    player_states[i].pos = (Vector2){player_pos.x, player_pos.y};
+                                    player_states[i].mass = player_pos.mass;
+                                }
+                            }
+                        }
+                    } else if (generic_msg->message_type == MSG_PLAYER_JOIN) {
+                        player_join_message_t *player_join_msg = (player_join_message_t *)generic_msg;
+
+                        int found_slot = 0;
+                        for (int i = 0; i < MAX_PLAYERS && !found_slot; i++) {
+                            if (player_states[i].id == 0) {
+                                player_states[i].id = player_join_msg->player_info.player_id;
+                                player_states[i].name = player_join_msg->player_info.name;
+                                // Prevent freeing the name later
+                                player_join_msg->player_info.name = NULL;
+
+                                found_slot = 1;
+                            }
+                        }
+
+                        if (!found_slot) {
+                            TraceLog(LOG_WARNING, "Got player join message, but there was no space in the internal player state data structure");
+                        }
+                    } else if (generic_msg->message_type == MSG_PLAYER_LEAVE) {
+                        player_leave_message_t *player_leave_msg = (player_leave_message_t *)generic_msg;
+
+                        TraceLog(LOG_DEBUG, "Got player leave message");
+
+                        int found_player = 0;
+                        for (int i = 0; i < MAX_PLAYERS && !found_player; i++) {
+                            if (player_states[i].id == player_leave_msg->player_id) {
+                                memset(player_states + i, 0, sizeof(player_state_t));
+
+                                found_player = 1;
+                            }
+                        }
+
+                        if (!found_player) {
+                            TraceLog(LOG_WARNING, "Got player leave message, but the internal player state data structure did not contain that player");
+                        }
+                    }
+
+                    // TODO: Handle game full
+
+                    message_free(generic_msg);
+                }
+            }
+        }
 
         switch (state) {
             case STATE_ENTER_NAME:
@@ -139,82 +262,10 @@ int main(void) {
                         // TODO: Handle error
                         send_all(sock, send_buf, msg_len);
 
-                        int got_join_ack = 0;
-                        int got_current_players = 0;
-                        while (!got_join_ack || !got_current_players) {
-                            int space_in_buffer = RECV_BUF_LEN - recv_buf_idx;
-                            n_bytes = recv(sock, recv_buf + recv_buf_idx, space_in_buffer, 0);
+                        got_join_ack = 0;
+                        got_current_players = 0;
 
-                            if (n_bytes == -1) {
-                                if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                                    usleep(1e4);
-                                } else if (errno != EINTR) {
-                                    TraceLog(LOG_WARNING, "Error receiving from socket: %s", strerror(errno));
-                                }
-                            } else if (n_bytes == 0) {
-                                // TODO: Handle this better
-                                TraceLog(LOG_WARNING, "Server closed connection -- quitting");
-                                CloseWindow();
-                                return 1;
-                            } else {
-                                recv_buf_idx += n_bytes;
-
-                                generic_message_t *generic_msg = NULL;
-                                int msg_bytes = deserialize_message(recv_buf, recv_buf_idx, &generic_msg);
-
-                                if (generic_msg) {
-                                    assert(msg_bytes <= recv_buf_idx);
-
-                                    int bytes_left_in_buffer = recv_buf_idx - msg_bytes;
-
-                                    // Move the rest of the buffer over
-                                    memmove(recv_buf, recv_buf + msg_bytes, bytes_left_in_buffer);
-                                    recv_buf_idx = bytes_left_in_buffer;
-
-                                    // Zero the rest of the buffer just to be safe.
-                                    // This is just overhead if everything works as expected.
-                                    memset(recv_buf + bytes_left_in_buffer, 0, msg_bytes);
-
-                                    if (generic_msg->message_type == MSG_JOIN_ACK) {
-                                        join_ack_message_t *join_ack_msg = (join_ack_message_t *)generic_msg;
-                                        memcpy(rejoin_token, join_ack_msg->rejoin_token, REJOIN_TOKEN_LEN);
-                                        own_player_id = join_ack_msg->player_id;
-
-                                        TraceLog(LOG_INFO, "Joined game with player id %d", own_player_id);
-
-                                        got_join_ack = 1;
-                                    } else if (generic_msg->message_type == MSG_CURRENT_PLAYERS) {
-                                        current_players_message_t *current_players_msg = (current_players_message_t *)generic_msg;
-
-                                        for (int player_idx = 0; player_idx < current_players_msg->player_count; player_idx++) {
-                                            player_info_t player_info = current_players_msg->player_infos[player_idx];
-
-                                            if (player_idx >= MAX_PLAYERS) {
-                                                TraceLog(LOG_WARNING, "Player list of server contains more players than the player limit");
-                                                break;
-                                            }
-
-                                            player_states[player_idx].id = player_info.player_id;
-                                            player_states[player_idx].name = player_info.name;
-                                            // Take complete ownership of the allocated string, so that is is not free'd later
-                                            player_info.name = NULL;
-                                            player_states[player_idx].pos = (Vector2){-1, -1};
-                                            player_states[player_idx].mass = -1;
-                                        }
-
-                                        got_current_players = 1;
-                                    }
-
-                                    // TODO: Read current players message
-
-                                    // TODO: Handle game full
-
-                                    message_free(generic_msg);
-                                }
-                            }
-                        }
-
-                        state = STATE_INGAME;
+                        state = STATE_JOINING;
                     } else if (key == KEY_BACKSPACE) {
                         if (player_name_chars > 0) {
                             player_name_chars--;
@@ -229,58 +280,19 @@ int main(void) {
                 break;
             }
 
-            case STATE_INGAME:
+            case STATE_JOINING:
             {
-                int space_in_buffer = RECV_BUF_LEN - recv_buf_idx;
-                n_bytes = recv(sock, recv_buf + recv_buf_idx, space_in_buffer, 0);
-
-                if (n_bytes == -1) {
-                    if (errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR) {
-                        TraceLog(LOG_WARNING, "Error receiving from socket: %s", strerror(errno));
-                    }
-                } else if (n_bytes == 0) {
-                    // TODO: Handle this better
-                    TraceLog(LOG_WARNING, "Server closed connection -- quitting");
-                    CloseWindow();
-                    return 1;
-                } else {
-                    recv_buf_idx += n_bytes;
-
-                    generic_message_t *generic_msg = NULL;
-                    int msg_bytes = deserialize_message(recv_buf, recv_buf_idx, &generic_msg);
-
-                    if (generic_msg) {
-                        assert(msg_bytes <= recv_buf_idx);
-
-                        int bytes_left_in_buffer = recv_buf_idx - msg_bytes;
-
-                        // Move the rest of the buffer over
-                        memmove(recv_buf, recv_buf + msg_bytes, bytes_left_in_buffer);
-                        recv_buf_idx = bytes_left_in_buffer;
-
-                        // Zero the rest of the buffer just to be safe.
-                        // This is just overhead if everything works as expected.
-                        memset(recv_buf + bytes_left_in_buffer, 0, msg_bytes);
-
-                        if (generic_msg->message_type == MSG_PLAYER_POSITIONS) {
-                            player_positions_message_t *player_positions_msg = (player_positions_message_t *)generic_msg;
-                            for (int player_idx = 0; player_idx < player_positions_msg->player_count; player_idx++) {
-                                player_position_t player_pos = player_positions_msg->player_positions[player_idx];
-
-                                // TODO: Implement more efficient data structure for this!!
-                                for (int i = 0; i < MAX_PLAYERS; i++) {
-                                    if (player_states[i].id == player_pos.player_id) {
-                                        player_states[i].pos = (Vector2){player_pos.x, player_pos.y};
-                                        player_states[i].mass = player_pos.mass;
-                                    }
-                                }
-                            }
-                        }
-
-                        message_free(generic_msg);
-                    }
+                if (got_join_ack && got_current_players) {
+                    state = STATE_INGAME;
                 }
 
+                DrawText("Joining...", 0, 0, 24, WHITE);
+
+                break;
+            }
+
+            case STATE_INGAME:
+            {
                 Vector2 mouse_pos = GetMousePosition();
                 int is_inside_window = mouse_pos.x >= 0 && mouse_pos.x <= WINDOW_WIDTH && mouse_pos.y >= 0 && mouse_pos.y <= WINDOW_HEIGHT;
                 if (is_inside_window && !Vector2Equals(previous_display_target, mouse_pos)) {
@@ -300,7 +312,7 @@ int main(void) {
                 DrawText("Welcome to AgarIO", 0, 0, 24, WHITE);
 
                 for (int i = 0; i < MAX_PLAYERS; i++) {
-                    if (player_states[i].mass != 0) {
+                    if (player_states[i].id != 0) {
                         Color color = player_states[i].id == own_player_id ? DARKBLUE : RED;
                         Vector2 window_pos = Vector2Scale(player_states[i].pos, field_to_window_scale_factor);
                         DrawCircleV(window_pos, 50, color);
