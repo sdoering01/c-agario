@@ -188,7 +188,7 @@ static bool is_valid_serialized_message(uint8_t *buf, uint16_t buf_len) {
     }
 
     return true;
-};
+}
 
 static int serialized_message_length(generic_message_t *generic_msg) {
     int len = 2 + 1;

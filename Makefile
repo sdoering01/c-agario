@@ -6,7 +6,7 @@ GUI_OBJECTS = gui.o protocol.o networking.o
 
 HEADERS = geometry.h protocol.h networking.h
 
-CFLAGS = -Wall -O2
+CFLAGS = -Wall -Wpedantic -O2
 GUI_CFLAGS = $(CFLAGS) `pkg-config --cflags raylib`
 
 LINK_FLAGS = -lm

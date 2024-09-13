@@ -44,7 +44,7 @@ typedef struct context_t {
 // make it look like this is a public function.
 static void broadcast_bytes(uint8_t *buf, int buf_len, context_t *ctx);
 
-static vec2_t generate_player_pos() {
+static vec2_t generate_player_pos(void) {
     float x = rand() % FIELD_WIDTH;
     float y = rand() % FIELD_HEIGHT;
     return (vec2_t){x, y};
@@ -79,7 +79,7 @@ static int get_player_count(context_t *ctx) {
 }
 
 static int connect_player(int sock, context_t *ctx) {
-    struct kevent change = {};
+    struct kevent change = {0};
     int ret, idx = 0;
 
     while (idx < MAX_PLAYERS && ctx->players[idx]) {
@@ -89,13 +89,14 @@ static int connect_player(int sock, context_t *ctx) {
     if (idx == MAX_PLAYERS) {
         printf("player tried to connect while game was full\n");
 
-        join_error_message_t join_error_msg = {};
-        join_error_msg.message_type = MSG_JOIN_ERROR;
-        join_error_msg.error_code = JOIN_ERR_GAME_FULL;
-        join_error_msg.error_message_length = strlen(GAME_FULL_ERROR_MSG);
-        join_error_msg.error_message = GAME_FULL_ERROR_MSG;
+        join_error_message_t join_error_msg = {
+            .message_type = MSG_JOIN_ERROR,
+            .error_code = JOIN_ERR_GAME_FULL,
+            .error_message_length = strlen(GAME_FULL_ERROR_MSG),
+            .error_message = GAME_FULL_ERROR_MSG,
+        };
 
-        uint8_t send_buf[65535] = {};
+        uint8_t send_buf[65535] = {0};
         int send_len = serialize_message((generic_message_t *)&join_error_msg, send_buf, sizeof(send_buf));
         if (send_len > 0) {
             send_all(sock, send_buf, send_len);
@@ -121,7 +122,7 @@ static int connect_player(int sock, context_t *ctx) {
 }
 
 static void disconnect_player(player_t *player, context_t *ctx) {
-    struct kevent change = {};
+    struct kevent change = {0};
 
     int idx = 0;
     while (idx < MAX_PLAYERS && ctx->players[idx] != player) {
@@ -214,28 +215,33 @@ static void handle_player_message(uint8_t *recv_buf, uint16_t recv_len, player_t
         if (!player->joined && generic_msg->message_type == MSG_JOIN) {
             join_player(player, (join_message_t *)generic_msg, ctx);
 
-            join_ack_message_t join_ack_msg = {};
-            join_ack_msg.message_type = MSG_JOIN_ACK;
-            join_ack_msg.player_id = player->id;
+            join_ack_message_t join_ack_msg = {
+                .message_type = MSG_JOIN_ACK,
+                .player_id = player->id,
+            };
             memcpy(join_ack_msg.rejoin_token, player->rejoin_token, REJOIN_TOKEN_LEN);
             send_len = serialize_message(
                     (generic_message_t *)&join_ack_msg, send_buf, sizeof(send_buf));
             send_bytes(send_buf, send_len, player, ctx);
 
-            player_join_message_t player_join_msg = {};
-            player_join_msg.message_type = MSG_PLAYER_JOIN;
-            player_join_msg.player_info.player_id = player->id;
-            player_join_msg.player_info.name_length = strlen(player->name);
-            player_join_msg.player_info.name = player->name;
+            player_join_message_t player_join_msg = {
+                .message_type = MSG_PLAYER_JOIN,
+                .player_info = {
+                    .player_id = player->id,
+                    .name_length = strlen(player->name),
+                    .name = player->name,
+                },
+            };
             send_len = serialize_message(
                     (generic_message_t *)&player_join_msg, send_buf, sizeof(send_buf));
             broadcast_bytes(send_buf, send_len, ctx);
 
-            current_players_message_t current_players_msg = {};
-            current_players_msg.message_type = MSG_CURRENT_PLAYERS;
             int player_count = get_player_count(ctx);
-            current_players_msg.player_count = player_count;
-            current_players_msg.player_infos = calloc(player_count, sizeof(player_info_t));
+            current_players_message_t current_players_msg = {
+                .message_type = MSG_CURRENT_PLAYERS,
+                .player_count = player_count,
+                .player_infos = calloc(player_count, sizeof(player_info_t)),
+            };
             int info_idx = 0;
             for (int i = 0; i < MAX_PLAYERS; i++) {
                 if (ctx->players[i] && ctx->players[i]->joined) {
@@ -294,10 +300,11 @@ static void tick(context_t *ctx) {
 
     int player_count = get_player_count(ctx);
     int player_idx = 0;
-    player_positions_message_t player_pos_msg = {};
-    player_pos_msg.message_type = MSG_PLAYER_POSITIONS;
-    player_pos_msg.player_count = player_count;
-    player_pos_msg.player_positions = calloc(player_count, sizeof(player_position_t));
+    player_positions_message_t player_pos_msg = {
+        .message_type = MSG_PLAYER_POSITIONS,
+        .player_count = player_count,
+        .player_positions = calloc(player_count, sizeof(player_position_t)),
+    };
     for (int i = 0; i < MAX_PLAYERS; i++) {
         player_t *player = ctx->players[i];
         if (player) {
@@ -316,10 +323,10 @@ static void tick(context_t *ctx) {
 int main(void) {
     int server_sock, client_sock, kq, running = 1, event_count, i;
     struct sockaddr_in server_addr;
-    uint8_t client_message[2000] = {};
+    uint8_t client_message[2000] = {0};
     ssize_t bytes_received;
-    struct kevent change = {}, events[MAX_EVENTS] = {};
-    struct timespec timeout = {};
+    struct kevent change = {0}, events[MAX_EVENTS] = {0};
+    struct timespec timeout = {0};
     long tick_nsec = 1e9 / TICKS_PER_SEC;
     context_t ctx = { .next_player_id = 1 };
 
