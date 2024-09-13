@@ -19,5 +19,11 @@ float vec2_abs(vec2_t v) {
 }
 
 vec2_t vec2_norm(vec2_t v) {
-    return vec2_scale(v, 1 / vec2_abs(v));
+    float length = vec2_abs(v);
+    if (length != 0) {
+        return vec2_scale(v, 1 / length);
+    } else {
+        // We cannot normalize the vector, so just return it as is.
+        return v;
+    }
 }
