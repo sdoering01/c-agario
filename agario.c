@@ -408,7 +408,7 @@ int main(void) {
                 for (int ticks = events[i].data; ticks > 0; ticks--) {
                     tick(&ctx);
                 }
-            } else if (events[i].ident == server_sock) {
+            } else if ((int)events[i].ident == server_sock) {
                 client_sock = accept(server_sock, NULL, NULL);
                 printf("got client_sock: %d\n", client_sock);
                 if (client_sock < 0) {

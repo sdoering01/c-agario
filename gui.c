@@ -25,8 +25,8 @@
 #define STATE_INGAME 3
 
 typedef struct player_state_t {
-    int id;
-    int mass;
+    uint32_t id;
+    uint32_t mass;
     char *name;
     Vector2 pos;
 } player_state_t;
