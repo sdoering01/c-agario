@@ -32,7 +32,8 @@ void test_join_message(void) {
     len = serialize_message((generic_message_t *)msg, buf, BUF_SIZE);
     TEST_ASSERT_EQUAL(9, len);
 
-    join_message_t *msg2 = (join_message_t *)deserialize_message(buf, len);
+    join_message_t *msg2 = NULL;
+    (void)deserialize_message(buf, len, (generic_message_t **)&msg2);
     TEST_ASSERT_EQUAL(MSG_JOIN, msg2->message_type);
     TEST_ASSERT_EQUAL(5, msg2->name_length);
     TEST_ASSERT_EQUAL_STRING("Simon", msg2->name);
@@ -52,7 +53,8 @@ void test_rejoin_message(void) {
     len = serialize_message((generic_message_t *)msg, buf, BUF_SIZE);
     TEST_ASSERT_EQUAL(7 + REJOIN_TOKEN_LEN, len);
 
-    rejoin_message_t *msg2 = (rejoin_message_t *)deserialize_message(buf, len);
+    rejoin_message_t *msg2 = NULL;
+    (void)deserialize_message(buf, len, (generic_message_t **)&msg2);
     TEST_ASSERT_EQUAL(MSG_REJOIN, msg2->message_type);
     TEST_ASSERT_EQUAL(player_id, msg2->player_id);
     TEST_ASSERT_EQUAL_MEMORY(rejoin_token, msg2->rejoin_token, REJOIN_TOKEN_LEN);
@@ -70,7 +72,8 @@ void test_leave_message(void) {
     len = serialize_message((generic_message_t *)msg, buf, BUF_SIZE);
     TEST_ASSERT_EQUAL(3, len);
 
-    leave_message_t *msg2 = (leave_message_t *)deserialize_message(buf, len);
+    leave_message_t *msg2 = NULL;
+    (void)deserialize_message(buf, len, (generic_message_t **)&msg2);
     TEST_ASSERT_EQUAL(MSG_LEAVE, msg2->message_type);
 
     message_free((generic_message_t *)msg);
@@ -88,7 +91,8 @@ void test_set_target_message(void) {
     len = serialize_message((generic_message_t *)msg, buf, BUF_SIZE);
     TEST_ASSERT_EQUAL(11, len);
 
-    set_target_message_t *msg2 = (set_target_message_t *)deserialize_message(buf, len);
+    set_target_message_t *msg2 = NULL;
+    (void)deserialize_message(buf, len, (generic_message_t **)&msg2);
     TEST_ASSERT_EQUAL(MSG_SET_TARGET, msg2->message_type);
     TEST_ASSERT_FLOAT_WITHIN(5e-2, 111.111, msg2->x);
     TEST_ASSERT_FLOAT_WITHIN(5e-2, 222.222, msg2->y);
@@ -108,7 +112,8 @@ void test_join_ack_message(void) {
     len = serialize_message((generic_message_t *)msg, buf, BUF_SIZE);
     TEST_ASSERT_EQUAL(7 + REJOIN_TOKEN_LEN, len);
 
-    join_ack_message_t *msg2 = (join_ack_message_t *)deserialize_message(buf, len);
+    join_ack_message_t *msg2 = NULL;
+    (void)deserialize_message(buf, len, (generic_message_t **)&msg2);
     TEST_ASSERT_EQUAL(MSG_JOIN_ACK, msg2->message_type);
     TEST_ASSERT_EQUAL(player_id, msg2->player_id);
     TEST_ASSERT_EQUAL_MEMORY(rejoin_token, msg2->rejoin_token, REJOIN_TOKEN_LEN);
@@ -139,7 +144,8 @@ void test_current_players_message(void) {
     len = serialize_message((generic_message_t *)msg, buf, BUF_SIZE);
     TEST_ASSERT_EQUAL(29, len);
 
-    current_players_message_t *msg2 = (current_players_message_t *)deserialize_message(buf, len);
+    current_players_message_t *msg2 = NULL;
+    (void)deserialize_message(buf, len, (generic_message_t **)&msg2);
     TEST_ASSERT_EQUAL(MSG_CURRENT_PLAYERS, msg2->message_type);
     TEST_ASSERT_EQUAL(3, msg2->player_count);
     TEST_ASSERT_EQUAL(0x12345678, msg2->player_infos[0].player_id);
@@ -167,7 +173,8 @@ void test_empty_current_players_message(void) {
     len = serialize_message((generic_message_t *)msg, buf, BUF_SIZE);
     TEST_ASSERT_EQUAL(5, len);
 
-    current_players_message_t *msg2 = (current_players_message_t *)deserialize_message(buf, len);
+    current_players_message_t *msg2 = NULL;
+    (void)deserialize_message(buf, len, (generic_message_t **)&msg2);
     TEST_ASSERT_EQUAL(MSG_CURRENT_PLAYERS, msg2->message_type);
     TEST_ASSERT_EQUAL(0, msg2->player_count);
     TEST_ASSERT_NULL(msg2->player_infos);
@@ -189,7 +196,8 @@ void test_player_join_message(void) {
     len = serialize_message((generic_message_t *)msg, buf, BUF_SIZE);
     TEST_ASSERT_EQUAL(13, len);
 
-    player_join_message_t *msg2 = (player_join_message_t *)deserialize_message(buf, len);
+    player_join_message_t *msg2 = NULL;
+    (void)deserialize_message(buf, len, (generic_message_t **)&msg2);
     TEST_ASSERT_EQUAL(MSG_PLAYER_JOIN, msg2->message_type);
     TEST_ASSERT_EQUAL(player_id, msg2->player_info.player_id);
     TEST_ASSERT_EQUAL(5, msg2->player_info.name_length);
@@ -209,7 +217,8 @@ void test_player_leave_message(void) {
     len = serialize_message((generic_message_t *)msg, buf, BUF_SIZE);
     TEST_ASSERT_EQUAL(7, len);
 
-    player_leave_message_t *msg2 = (player_leave_message_t *)deserialize_message(buf, len);
+    player_leave_message_t *msg2 = NULL;
+    (void)deserialize_message(buf, len, (generic_message_t **)&msg2);
     TEST_ASSERT_EQUAL(MSG_PLAYER_LEAVE, msg2->message_type);
     TEST_ASSERT_EQUAL(player_id, msg2->player_id);
 
@@ -240,7 +249,8 @@ void test_player_positions_message(void) {
     len = serialize_message((generic_message_t *)msg, buf, BUF_SIZE);
     TEST_ASSERT_EQUAL(53, len);
 
-    player_positions_message_t *msg2 = (player_positions_message_t *)deserialize_message(buf, len);
+    player_positions_message_t *msg2 = NULL;
+    (void)deserialize_message(buf, len, (generic_message_t **)&msg2);
     TEST_ASSERT_EQUAL(MSG_PLAYER_POSITIONS, msg2->message_type);
     TEST_ASSERT_EQUAL(3, msg2->player_count);
     TEST_ASSERT_EQUAL(0x12345678, msg2->player_positions[0].player_id);
@@ -271,7 +281,8 @@ void test_empty_player_positions_message(void) {
     len = serialize_message((generic_message_t *)msg, buf, BUF_SIZE);
     TEST_ASSERT_EQUAL(5, len);
 
-    player_positions_message_t *msg2 = (player_positions_message_t *)deserialize_message(buf, len);
+    player_positions_message_t *msg2 = NULL;
+    (void)deserialize_message(buf, len, (generic_message_t **)&msg2);
     TEST_ASSERT_EQUAL(MSG_PLAYER_POSITIONS, msg2->message_type);
     TEST_ASSERT_EQUAL(0, msg2->player_count);
     TEST_ASSERT_NULL(msg2->player_positions);
@@ -300,7 +311,8 @@ void test_spawned_food_message(void) {
     len = serialize_message((generic_message_t *)msg, buf, BUF_SIZE);
     TEST_ASSERT_EQUAL(41, len);
 
-    spawned_food_message_t *msg2 = (spawned_food_message_t *)deserialize_message(buf, len);
+    spawned_food_message_t *msg2 = NULL;
+    (void)deserialize_message(buf, len, (generic_message_t **)&msg2);
     TEST_ASSERT_EQUAL(MSG_SPAWNED_FOOD, msg2->message_type);
     TEST_ASSERT_EQUAL(3, msg2->food_count);
     TEST_ASSERT_EQUAL(0x12345678, msg2->food_positions[0].food_id);
@@ -328,7 +340,8 @@ void test_empty_spawned_food_message(void) {
     len = serialize_message((generic_message_t *)msg, buf, BUF_SIZE);
     TEST_ASSERT_EQUAL(5, len);
 
-    spawned_food_message_t *msg2 = (spawned_food_message_t *)deserialize_message(buf, len);
+    spawned_food_message_t *msg2 = NULL;
+    (void)deserialize_message(buf, len, (generic_message_t **)&msg2);
     TEST_ASSERT_EQUAL(MSG_SPAWNED_FOOD, msg2->message_type);
     TEST_ASSERT_EQUAL(0, msg2->food_count);
     TEST_ASSERT_NULL(msg2->food_positions);
@@ -351,7 +364,8 @@ void test_eaten_food_message(void) {
     len = serialize_message((generic_message_t *)msg, buf, BUF_SIZE);
     TEST_ASSERT_EQUAL(17, len);
 
-    eaten_food_message_t *msg2 = (eaten_food_message_t *)deserialize_message(buf, len);
+    eaten_food_message_t *msg2 = NULL;
+    (void)deserialize_message(buf, len, (generic_message_t **)&msg2);
     TEST_ASSERT_EQUAL(MSG_EATEN_FOOD, msg2->message_type);
     TEST_ASSERT_EQUAL(3, msg2->food_count);
     TEST_ASSERT_EQUAL(0x12345678, msg2->food_ids[0]);
@@ -373,7 +387,8 @@ void test_empty_eaten_food_message(void) {
     len = serialize_message((generic_message_t *)msg, buf, BUF_SIZE);
     TEST_ASSERT_EQUAL(5, len);
 
-    eaten_food_message_t *msg2 = (eaten_food_message_t *)deserialize_message(buf, len);
+    eaten_food_message_t *msg2 = NULL;
+    (void)deserialize_message(buf, len, (generic_message_t **)&msg2);
     TEST_ASSERT_EQUAL(MSG_EATEN_FOOD, msg2->message_type);
     TEST_ASSERT_EQUAL(0, msg2->food_count);
     TEST_ASSERT_NULL(msg2->food_ids);
@@ -395,7 +410,8 @@ void test_join_error_message(void) {
     len = serialize_message((generic_message_t *)msg, buf, BUF_SIZE);
     TEST_ASSERT_EQUAL(17, len);
 
-    join_error_message_t *msg2 = (join_error_message_t *)deserialize_message(buf, len);
+    join_error_message_t *msg2 = NULL;
+    (void)deserialize_message(buf, len, (generic_message_t **)&msg2);
     TEST_ASSERT_EQUAL(MSG_JOIN_ERROR, msg2->message_type);
     TEST_ASSERT_EQUAL(JOIN_ERR_GAME_FULL, msg2->error_code);
     TEST_ASSERT_EQUAL(12, msg2->error_message_length);
@@ -417,7 +433,8 @@ void test_empty_join_error_message(void) {
     len = serialize_message((generic_message_t *)msg, buf, BUF_SIZE);
     TEST_ASSERT_EQUAL(5, len);
 
-    join_error_message_t *msg2 = (join_error_message_t *)deserialize_message(buf, len);
+    join_error_message_t *msg2 = NULL;
+    (void)deserialize_message(buf, len, (generic_message_t **)&msg2);
     TEST_ASSERT_EQUAL(MSG_JOIN_ERROR, msg2->message_type);
     TEST_ASSERT_EQUAL(JOIN_ERR_GAME_FULL, msg2->error_code);
     TEST_ASSERT_EQUAL(0, msg2->error_message_length);
@@ -439,7 +456,8 @@ void test_kick_message(void) {
     len = serialize_message((generic_message_t *)msg, buf, BUF_SIZE);
     TEST_ASSERT_EQUAL(33, len);
 
-    kick_message_t *msg2 = (kick_message_t *)deserialize_message(buf, len);
+    kick_message_t *msg2 = NULL;
+    (void)deserialize_message(buf, len, (generic_message_t **)&msg2);
     TEST_ASSERT_EQUAL(MSG_KICK, msg2->message_type);
     TEST_ASSERT_EQUAL(29, msg2->reason_length);
     TEST_ASSERT_EQUAL_STRING("You were kicked from the game", msg2->reason);
@@ -459,7 +477,8 @@ void test_empty_kick_message(void) {
     len = serialize_message((generic_message_t *)msg, buf, BUF_SIZE);
     TEST_ASSERT_EQUAL(4, len);
 
-    kick_message_t *msg2 = (kick_message_t *)deserialize_message(buf, len);
+    kick_message_t *msg2 = NULL;
+    (void)deserialize_message(buf, len, (generic_message_t **)&msg2);
     TEST_ASSERT_EQUAL(MSG_KICK, msg2->message_type);
     TEST_ASSERT_EQUAL(0, msg2->reason_length);
     TEST_ASSERT_NULL(msg2->reason);
