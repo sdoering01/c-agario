@@ -52,7 +52,13 @@ all: $(SERVER_TARGET) $(GUI_TARGET) compile_flags.txt
 test: $(TEST_TARGETS)
 	./test/test_protocol
 
+run-server: $(SERVER_TARGET)
+	./$(SERVER_TARGET)
+
+run-gui: $(GUI_TARGET)
+	./$(GUI_TARGET)
+
 clean:
 	rm -f $(SERVER_OBJECTS) $(SERVER_TARGET) $(GUI_OBJECTS) $(GUI_TARGET) $(UNITY_OBJ) test/*.o $(TEST_TARGETS)
 
-.PHONY: all test clean
+.PHONY: all test run-server run-gui clean
