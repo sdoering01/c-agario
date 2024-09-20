@@ -24,6 +24,8 @@
 #define STATE_JOINING 2
 #define STATE_INGAME 3
 
+#define TARGET_FPS 60
+
 typedef struct player_state_t {
     uint32_t id;
     uint32_t mass;
@@ -69,7 +71,7 @@ int main(void) {
     float field_to_window_scale_factor = (float)(WINDOW_WIDTH) / 1000.0;
     float window_to_field_scale_factor = 1 / field_to_window_scale_factor;
 
-	SetConfigFlags(FLAG_VSYNC_HINT | FLAG_WINDOW_HIGHDPI);
+    SetTargetFPS(TARGET_FPS);
 
 	InitWindow(WINDOW_WIDTH, WINDOW_HEIGHT, "AgarIO");
 
