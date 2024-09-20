@@ -1,3 +1,4 @@
+#include <stdlib.h>
 #include <arpa/inet.h>
 #include <assert.h>
 #include <netinet/in.h>
@@ -32,6 +33,21 @@ typedef struct player_state_t {
     char *name;
     Vector2 pos;
 } player_state_t;
+
+void player_state_free(player_state_t *player_state) {
+    if (player_state->name) {
+        free(player_state->name);
+    }
+}
+
+void clear_player_states(player_state_t *player_states, size_t n_player_states) {
+    for (size_t i = 0; i < n_player_states; i++) {
+        if (player_states[i].id != 0) {
+            player_state_free(&player_states[i]);
+            memset(&player_states[i], 0, sizeof(player_state_t));
+        }
+    }
+}
 
 void draw_fps(void) {
     char fps_str[8] = {0};
@@ -162,6 +178,9 @@ int main(void) {
                         got_join_ack = 1;
                     } else if (generic_msg->message_type == MSG_CURRENT_PLAYERS) {
                         current_players_message_t *current_players_msg = (current_players_message_t *)generic_msg;
+
+                        // Clear the previous player states, since this meassge acts as an initialization
+                        clear_player_states(player_states, MAX_PLAYERS);
 
                         for (int player_idx = 0; player_idx < current_players_msg->player_count; player_idx++) {
                             player_info_t player_info = current_players_msg->player_infos[player_idx];
