@@ -18,6 +18,24 @@ I am aware that TCP is not the most optimal protocol for real-time games
 UDP-based protocol in the future, that contains mechanisms to handle dropped
 packets, retransmission, and package ordering.
 
+## Project Status
+
+This project is still in development.
+
+The server and GUI are already functional, the protocol is working, and players
+can join the game and move on the field.
+
+Currently I am working on implementing an AVL tree from scratch as a more
+efficient data structure to store and look up player information on the server
+and in the GUI.
+
+Some features that are missing include:
+
+- Spawning and eating foods
+- Eating different players
+- Leaderboard
+- Polishing
+
 ## Development
 
 Since this project uses OS-dependent low-level primitives and APIs, like
