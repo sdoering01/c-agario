@@ -15,7 +15,7 @@ GUI_LINK_FLAGS = $(LINK_FLAGS) `pkg-config --libs raylib`
 UNITY_SRC = test/unity/unity.c
 UNITY_HEADERS = test/unity/unity.h test/unity/unity_internals.h
 UNITY_OBJ = test/unity/unity.o
-TEST_TARGETS = test/test_protocol
+TEST_TARGETS = test/test_protocol test/test_tree
 
 # To add a new test
 #  - add the compilation recipe
@@ -44,6 +44,9 @@ test/%.o: test/%.c $(HEADERS)
 test/test_protocol: test/test_protocol.o protocol.o $(UNITY_OBJ)
 	gcc $^ -o $@ $(LINK_FLAGS)
 
+test/test_tree: test/test_tree.o tree.o $(UNITY_OBJ)
+	gcc $^ -o $@ $(LINK_FLAGS)
+
 compile_flags.txt: generate_compile_flags.sh
 	./generate_compile_flags.sh
 
@@ -51,12 +54,20 @@ all: $(SERVER_TARGET) $(GUI_TARGET) compile_flags.txt
 
 test: $(TEST_TARGETS)
 	./test/test_protocol
+	@echo "\n"
+	./test/test_tree
 
 run-server: $(SERVER_TARGET)
 	./$(SERVER_TARGET)
 
 run-gui: $(GUI_TARGET)
 	./$(GUI_TARGET)
+
+debug_tree: tree.o debug_tree.o
+	gcc $^ -o $@ $(LINK_FLAGS)
+
+debug-tree: debug_tree
+	./$<
 
 clean:
 	rm -f $(SERVER_OBJECTS) $(SERVER_TARGET) $(GUI_OBJECTS) $(GUI_TARGET) $(UNITY_OBJ) test/*.o $(TEST_TARGETS)
