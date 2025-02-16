@@ -335,6 +335,7 @@ int main(void) {
     signal(SIGPIPE, SIG_IGN);
 
     // Seed random generator
+    // TODO: Replace with `arc4random` for better randomness
     srand(time(NULL));
 
     server_sock = socket(AF_INET, SOCK_STREAM, 0);
