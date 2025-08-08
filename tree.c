@@ -4,9 +4,14 @@
 #include <assert.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <stddef.h>
+#include <stdalign.h>
 
 #define LEFT 1
 #define RIGHT 0
+
+static alignas(max_align_t) char no_node_sentinel_data;
+void *no_node_sentinel = &no_node_sentinel_data;
 
 node_t *node_new(int key, void *value) {
     node_t *node = calloc(1, sizeof(node_t));
@@ -37,7 +42,7 @@ void *node_insert(node_t *node, int key, void *value) {
     if (key < node->key) {
         if (node->left) {
             void *prev_value = node_insert(node->left, key, value);
-            if (!prev_value) {
+            if (prev_value == no_node_sentinel) {
                 node->balance_factor -= 1;
             }
             return prev_value;
@@ -49,7 +54,7 @@ void *node_insert(node_t *node, int key, void *value) {
     } else {
         if (node->right) {
             void *prev_value = node_insert(node->right, key, value);
-            if (!prev_value) {
+            if (prev_value == no_node_sentinel) {
                 node->balance_factor += 1;
             }
             return prev_value;
@@ -60,12 +65,12 @@ void *node_insert(node_t *node, int key, void *value) {
         }
     }
 
-    return NULL;
+    return no_node_sentinel;
 }
 
 void *node_get(node_t *node, int key) {
     if (!node) {
-        return NULL;
+        return no_node_sentinel;
     }
 
     if (key == node->key) {
@@ -81,7 +86,7 @@ void *node_remove(node_t **node_addr, int key) {
     node_t *node = *node_addr;
 
     if (!node) {
-        return NULL;
+        return no_node_sentinel;
     }
 
     // TODO: Consider `NULL` values for nodes. See comment in `node_insert`.
@@ -97,13 +102,13 @@ void *node_remove(node_t **node_addr, int key) {
         return value;
     } else if (key < node->key) {
         node_t *prev_value = node_remove(&node->left, key);
-        if (prev_value) {
+        if (prev_value != no_node_sentinel) {
             node->balance_factor += 1;
         }
         return prev_value;
     } else {
         node_t *prev_value = node_remove(&node->right, key);
-        if (prev_value) {
+        if (prev_value != no_node_sentinel) {
             node->balance_factor -= 1;
         }
         return prev_value;

@@ -50,17 +50,17 @@ void assert_integrity(node_t *node) {
 void test_node_insert(void) {
     node_t *root = node_new(1, (void *)1);
 
-    TEST_ASSERT_NULL(node_get(root, 2));
+    TEST_ASSERT_EQUAL(node_get(root, 2), no_node_sentinel);
 
-    TEST_ASSERT_NULL(node_insert(root, 2, (void *)2));
-    TEST_ASSERT_NULL(node_insert(root, -1, (void *)-1));
-    TEST_ASSERT_NULL(node_insert(root, 42, (void *)42));
+    TEST_ASSERT_EQUAL(node_insert(root, 2, (void *)2), no_node_sentinel);
+    TEST_ASSERT_EQUAL(node_insert(root, -1, (void *)-1), no_node_sentinel);
+    TEST_ASSERT_EQUAL(node_insert(root, 42, (void *)42), no_node_sentinel);
 
     TEST_ASSERT_EQUAL(2, (long)node_get(root, 2));
     TEST_ASSERT_EQUAL(-1, (long)node_get(root, -1));
     TEST_ASSERT_EQUAL(42, (long)node_get(root, 42));
 
-    TEST_ASSERT_NULL(node_get(root, 21));
+    TEST_ASSERT_EQUAL(node_get(root, 21), no_node_sentinel);
 
     TEST_ASSERT_EQUAL(2, (long)node_insert(root, 2, (void *)2));
     TEST_ASSERT_EQUAL(2, (long)node_get(root, 2));
@@ -86,8 +86,8 @@ void test_node_removal(void) {
         TEST_ASSERT_EQUAL(value, node_remove(&root, keys[i]));
 
         assert_integrity(root);
-        TEST_ASSERT_NULL(node_get(root, keys[i]));
-        TEST_ASSERT_NULL(node_remove(&root, keys[i]));
+        TEST_ASSERT_EQUAL(node_get(root, keys[i]), no_node_sentinel);
+        TEST_ASSERT_EQUAL(node_remove(&root, keys[i]), no_node_sentinel);
     }
 
 }
@@ -121,7 +121,7 @@ void test_with_random_numbers(void) {
             long value = 2 * key;
 
             TEST_ASSERT_EQUAL(value, node_remove(&root, key));
-            TEST_ASSERT_NULL(node_get(root, key));
+            TEST_ASSERT_EQUAL(node_get(root, key), no_node_sentinel);
 
             if (root) {
                 assert_integrity(root);

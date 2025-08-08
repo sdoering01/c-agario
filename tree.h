@@ -15,6 +15,8 @@ typedef struct node_t {
 
 node_t *node_new(int key, void *value);
 
+extern void *no_node_sentinel;
+
 /**
  * Inserts the value and associates it with the key.
  *
