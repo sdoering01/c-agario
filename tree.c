@@ -401,6 +401,12 @@ void *tree_remove(tree_t *tree, int key) {
     return ret_value;
 }
 
+void tree_clear(tree_t *tree, void (*value_free_func)(void *)) {
+    node_free_recursive(tree->root, value_free_func);
+    tree->root = NULL;
+    tree->size = 0;
+}
+
 void tree_for_each_value(tree_t *tree, void (*func)(void *)) {
     node_for_each_recursive(tree->root, func);
 }

@@ -38,6 +38,11 @@ void *tree_get(tree_t *tree, int key);
  */
 void *tree_remove(tree_t *tree, int key);
 
+/**
+ * Clears all nodes from the tree, freeing values with `value_free_func`.
+ */
+void tree_clear(tree_t *tree, void (*value_free_func)(void *));
+
 void tree_for_each_value(tree_t *tree, void (*func)(void *));
 
 void tree_print(tree_t *tree);
