@@ -2,7 +2,7 @@ SERVER_TARGET = agario
 SERVER_OBJECTS = agario.o geometry.o protocol.o networking.o
 
 GUI_TARGET = gui
-GUI_OBJECTS = gui.o protocol.o networking.o
+GUI_OBJECTS = gui.o protocol.o networking.o tree.o
 
 HEADERS = geometry.h protocol.h networking.h
 

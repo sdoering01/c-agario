@@ -11,6 +11,7 @@
 
 #include "raylib.h"
 
+#include "tree.h"
 #include "protocol.h"
 #include "networking.h"
 #include "raymath.h"
@@ -34,19 +35,28 @@ typedef struct player_state_t {
     Vector2 pos;
 } player_state_t;
 
+player_state_t *player_state_new(uint32_t id, char *name) {
+    player_state_t *player_state = calloc(1, sizeof(player_state_t));
+    player_state->id = id;
+    player_state->name = name;
+    player_state->mass = -1;
+    player_state->pos = (Vector2){-1, -1};
+    return player_state;
+}
+
 void player_state_free(player_state_t *player_state) {
     if (player_state->name) {
         free(player_state->name);
     }
+    free(player_state);
 }
 
-void clear_player_states(player_state_t *player_states, size_t n_player_states) {
-    for (size_t i = 0; i < n_player_states; i++) {
-        if (player_states[i].id != 0) {
-            player_state_free(&player_states[i]);
-            memset(&player_states[i], 0, sizeof(player_state_t));
-        }
-    }
+void player_state_free_void_ptr(void *player_state) {
+    player_state_free((player_state_t *)player_state);
+}
+
+void clear_player_states(tree_t *player_states) {
+    tree_clear(player_states, player_state_free_void_ptr);
 }
 
 void draw_fps(void) {
@@ -61,6 +71,18 @@ void draw_fps(void) {
     snprintf(fps_str, sizeof(fps_str), "%d", fps);
     int fps_text_width = MeasureText(fps_str, fps_font_size);
     DrawText(fps_str, WINDOW_WIDTH - fps_text_width, 0, fps_font_size, WHITE);
+}
+
+// TODO: Remove these in favor of new for-each function for tree, that accepts context
+uint32_t global_own_player_id;
+float global_field_to_window_scale_factor;
+
+void draw_player_pos(void *player_state_void_ptr) {
+    player_state_t *player_state = player_state_void_ptr;
+
+    Color color = player_state->id == global_own_player_id ? DARKBLUE : RED;
+    Vector2 window_pos = Vector2Scale(player_state->pos, global_field_to_window_scale_factor);
+    DrawCircleV(window_pos, 50, color);
 }
 
 int main(void) {
@@ -79,12 +101,11 @@ int main(void) {
     // Start the position outside of the field
     Vector2 previous_display_target = {-1, -1};
 
-    // TODO: Get the max players from the server
-    #define MAX_PLAYERS 64
-    player_state_t player_states[MAX_PLAYERS] = {0};
+    tree_t *player_states = tree_new();
 
     // TODO: Get the field size from server
     float field_to_window_scale_factor = (float)(WINDOW_WIDTH) / 1000.0;
+    global_field_to_window_scale_factor = field_to_window_scale_factor;
     float window_to_field_scale_factor = 1 / field_to_window_scale_factor;
 
     SetTargetFPS(TARGET_FPS);
@@ -172,6 +193,7 @@ int main(void) {
                         join_ack_message_t *join_ack_msg = (join_ack_message_t *)generic_msg;
                         memcpy(rejoin_token, join_ack_msg->rejoin_token, REJOIN_TOKEN_LEN);
                         own_player_id = join_ack_msg->player_id;
+                        global_own_player_id = own_player_id;
 
                         TraceLog(LOG_INFO, "Joined game with player id %d", own_player_id);
 
@@ -180,22 +202,16 @@ int main(void) {
                         current_players_message_t *current_players_msg = (current_players_message_t *)generic_msg;
 
                         // Clear the previous player states, since this meassge acts as an initialization
-                        clear_player_states(player_states, MAX_PLAYERS);
+                        clear_player_states(player_states);
 
                         for (int player_idx = 0; player_idx < current_players_msg->player_count; player_idx++) {
                             player_info_t player_info = current_players_msg->player_infos[player_idx];
 
-                            if (player_idx >= MAX_PLAYERS) {
-                                TraceLog(LOG_WARNING, "Player list of server contains more players than the player limit");
-                                break;
-                            }
+                            player_state_t *player_state = player_state_new(player_info.player_id, player_info.name);
+                            tree_insert(player_states, player_info.player_id, (void *)player_state);
 
-                            player_states[player_idx].id = player_info.player_id;
-                            player_states[player_idx].name = player_info.name;
                             // Prevent freeing the name later
                             player_info.name = NULL;
-                            player_states[player_idx].pos = (Vector2){-1, -1};
-                            player_states[player_idx].mass = -1;
                         }
 
                         got_current_players = 1;
@@ -204,47 +220,32 @@ int main(void) {
                         for (int player_idx = 0; player_idx < player_positions_msg->player_count; player_idx++) {
                             player_position_t player_pos = player_positions_msg->player_positions[player_idx];
 
-                            // TODO: Implement more efficient data structure for this!!
-                            for (int i = 0; i < MAX_PLAYERS; i++) {
-                                if (player_states[i].id == player_pos.player_id) {
-                                    player_states[i].pos = (Vector2){player_pos.x, player_pos.y};
-                                    player_states[i].mass = player_pos.mass;
-                                }
+                            player_state_t *player_state = tree_get(player_states, player_pos.player_id);
+                            if (player_state != no_node_sentinel) {
+                                player_state->pos = (Vector2){player_pos.x, player_pos.y};
+                                player_state->mass = player_pos.mass;
                             }
                         }
                     } else if (generic_msg->message_type == MSG_PLAYER_JOIN) {
                         player_join_message_t *player_join_msg = (player_join_message_t *)generic_msg;
 
-                        int found_slot = 0;
-                        for (int i = 0; i < MAX_PLAYERS && !found_slot; i++) {
-                            if (player_states[i].id == 0) {
-                                player_states[i].id = player_join_msg->player_info.player_id;
-                                player_states[i].name = player_join_msg->player_info.name;
-                                // Prevent freeing the name later
-                                player_join_msg->player_info.name = NULL;
-
-                                found_slot = 1;
-                            }
+                        player_state_t *player_state = player_state_new(player_join_msg->player_info.player_id, player_join_msg->player_info.name);
+                        player_state_t *prev_player_state = tree_insert(player_states, player_join_msg->player_info.player_id, player_state);
+                        if (prev_player_state != no_node_sentinel) {
+                            player_state_free(prev_player_state);
                         }
 
-                        if (!found_slot) {
-                            TraceLog(LOG_WARNING, "Got player join message, but there was no space in the internal player state data structure");
-                        }
+                        // Prevent freeing the name later
+                        player_join_msg->player_info.name = NULL;
                     } else if (generic_msg->message_type == MSG_PLAYER_LEAVE) {
                         player_leave_message_t *player_leave_msg = (player_leave_message_t *)generic_msg;
 
                         TraceLog(LOG_DEBUG, "Got player leave message");
 
-                        int found_player = 0;
-                        for (int i = 0; i < MAX_PLAYERS && !found_player; i++) {
-                            if (player_states[i].id == player_leave_msg->player_id) {
-                                memset(player_states + i, 0, sizeof(player_state_t));
-
-                                found_player = 1;
-                            }
-                        }
-
-                        if (!found_player) {
+                        player_state_t *player_state = tree_remove(player_states, player_leave_msg->player_id);
+                        if (player_state != no_node_sentinel) {
+                            player_state_free(player_state);
+                        } else {
                             TraceLog(LOG_WARNING, "Got player leave message, but the internal player state data structure did not contain that player");
                         }
                     }
@@ -332,13 +333,7 @@ int main(void) {
 
                 DrawText("Welcome to AgarIO", 0, 0, 24, WHITE);
 
-                for (int i = 0; i < MAX_PLAYERS; i++) {
-                    if (player_states[i].id != 0) {
-                        Color color = player_states[i].id == own_player_id ? DARKBLUE : RED;
-                        Vector2 window_pos = Vector2Scale(player_states[i].pos, field_to_window_scale_factor);
-                        DrawCircleV(window_pos, 50, color);
-                    }
-                }
+                tree_for_each_value(player_states, draw_player_pos);
 
                 break;
             }
