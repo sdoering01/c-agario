@@ -1,39 +1,43 @@
 #ifndef TREE_H
 #define TREE_H
 
-/**
- * Currently, no values of `NULL` should be stored in the nodes, since this case
- * is not handled yet, and will cause the tree to become imbalanced.
- */
-typedef struct node_t {
-    int balance_factor;
-    int key;
-    void *value;
-    struct node_t *left;
-    struct node_t *right;
-} node_t;
+typedef struct node_t node_t;
 
-node_t *node_new(int key, void *value);
+typedef struct tree_t {
+    node_t *root;
+    int size;
+} tree_t;
 
 extern void *no_node_sentinel;
+
+tree_t *tree_new(void);
+
+void tree_free(tree_t *tree, void (*free_value_func)(void *));
 
 /**
  * Inserts the value and associates it with the key.
  *
  * If the key already existed, the value that was previously associated with the
  * key is returned.
+ *
+ * If the key did not exist, `no_node_sentinel` is returned.
  */
-void *node_insert(node_t **node, int key, void *value);
+void *tree_insert(tree_t *tree, int key, void *value);
 
-void *node_get(node_t *node, int key);
+/**
+ * Returns the value for the given key or `no_node_sentinel` if the key did not
+ * exist in the tree.
+ */
+void *tree_get(tree_t *tree, int key);
 
-// TODO: Maybe make this private
-void _node_replace(node_t **node_addr);
+/**
+ * Removes the node with the given key from the tree.
+ *
+ * Returns the value of the key or `no_node_sentinel` if the key did not exist
+ * in the tree.
+ */
+void *tree_remove(tree_t *tree, int key);
 
-void _node_rebalance(node_t **node_addr);
-
-void *node_remove(node_t **node_addr, int key);
-
-void node_print(node_t *node);
+void tree_print(tree_t *tree);
 
 #endif // TREE_H

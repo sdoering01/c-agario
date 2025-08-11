@@ -1,5 +1,5 @@
 #include "unity/unity.h"
-#include "../tree.h"
+#include "../tree_internal.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -52,56 +52,60 @@ void assert_correctly_balanced(node_t *node) {
     }
 }
 
-void assert_integrity(node_t *node) {
-    assert_keys_ordered(node);
-    assert_correctly_balanced(node);
+void assert_integrity(tree_t *tree) {
+    if (tree->root) {
+        assert_keys_ordered(tree->root);
+        assert_correctly_balanced(tree->root);
+    }
 }
 
-void test_node_insert(void) {
-    node_t *root = node_new(1, (void *)1);
+void test_tree_insert(void) {
+    tree_t *tree = tree_new();
+    tree_insert(tree, 1, (void *)1);
 
-    TEST_ASSERT_EQUAL(node_get(root, 2), no_node_sentinel);
+    TEST_ASSERT_EQUAL(tree_get(tree, 2), no_node_sentinel);
 
-    TEST_ASSERT_EQUAL(node_insert(&root, 2, (void *)2), no_node_sentinel);
-    TEST_ASSERT_EQUAL(node_insert(&root, -1, (void *)-1), no_node_sentinel);
-    TEST_ASSERT_EQUAL(node_insert(&root, 42, (void *)42), no_node_sentinel);
-    TEST_ASSERT_EQUAL(node_insert(&root, 1337, (void *)1337), no_node_sentinel);
-    TEST_ASSERT_EQUAL(node_insert(&root, 37, (void *)37), no_node_sentinel);
+    TEST_ASSERT_EQUAL(tree_insert(tree, 2, (void *)2), no_node_sentinel);
+    TEST_ASSERT_EQUAL(tree_insert(tree, -1, (void *)-1), no_node_sentinel);
+    TEST_ASSERT_EQUAL(tree_insert(tree, 42, (void *)42), no_node_sentinel);
+    TEST_ASSERT_EQUAL(tree_insert(tree, 1337, (void *)1337), no_node_sentinel);
+    TEST_ASSERT_EQUAL(tree_insert(tree, 37, (void *)37), no_node_sentinel);
 
-    TEST_ASSERT_EQUAL(2, (long)node_get(root, 2));
-    TEST_ASSERT_EQUAL(-1, (long)node_get(root, -1));
-    TEST_ASSERT_EQUAL(42, (long)node_get(root, 42));
-    TEST_ASSERT_EQUAL(1337, (long)node_get(root, 1337));
-    TEST_ASSERT_EQUAL(37, (long)node_get(root, 37));
+    TEST_ASSERT_EQUAL(2, (long)tree_get(tree, 2));
+    TEST_ASSERT_EQUAL(-1, (long)tree_get(tree, -1));
+    TEST_ASSERT_EQUAL(42, (long)tree_get(tree, 42));
+    TEST_ASSERT_EQUAL(1337, (long)tree_get(tree, 1337));
+    TEST_ASSERT_EQUAL(37, (long)tree_get(tree, 37));
 
-    TEST_ASSERT_EQUAL(node_get(root, 21), no_node_sentinel);
+    TEST_ASSERT_EQUAL(tree_get(tree, 21), no_node_sentinel);
 
-    TEST_ASSERT_EQUAL(2, (long)node_insert(&root, 2, (void *)2));
-    TEST_ASSERT_EQUAL(2, (long)node_get(root, 2));
+    TEST_ASSERT_EQUAL(2, (long)tree_insert(tree, 2, (void *)2));
+    TEST_ASSERT_EQUAL(2, (long)tree_get(tree, 2));
 
-    assert_integrity(root);
+    assert_integrity(tree);
 }
 
 void test_node_removal(void) {
-    node_t *root = node_new(5, (void *)5);
+    tree_t *tree = tree_new();
+    tree_insert(tree, 5, (void *)5);
 
     long keys[] = {2, 3, 9, 10, 11, 4, 7, 6, 8};
     int num_keys = sizeof(keys) / sizeof(keys[0]);
 
     for (int i = 0; i < num_keys; i++) {
         long value = 2 * keys[i];
-        node_insert(&root, keys[i], (void *)value);
+        tree_insert(tree, keys[i], (void *)value);
     }
 
-    assert_integrity(root);
+    assert_integrity(tree);
 
     for (int i = 0; i < num_keys; i++) {
         long value = 2 * keys[i];
-        TEST_ASSERT_EQUAL(value, node_remove(&root, keys[i]));
+        TEST_ASSERT_EQUAL(value, tree_remove(tree, keys[i]));
 
-        assert_integrity(root);
-        TEST_ASSERT_EQUAL(node_get(root, keys[i]), no_node_sentinel);
-        TEST_ASSERT_EQUAL(node_remove(&root, keys[i]), no_node_sentinel);
+        assert_integrity(tree);
+        TEST_ASSERT_EQUAL(tree_get(tree, keys[i]), no_node_sentinel);
+        TEST_ASSERT_EQUAL(tree_remove(tree, keys[i]), no_node_sentinel);
     }
 
 }
@@ -113,7 +117,7 @@ void test_with_random_numbers(void) {
     int keys[100] = {0};
 
     for (int n_nodes = 1; n_nodes < max_nodes; n_nodes++) {
-        node_t *root = NULL;
+        tree_t *tree = tree_new();
 
         for (int i = 0; i < n_nodes; i++) {
             long key = rand();
@@ -121,33 +125,64 @@ void test_with_random_numbers(void) {
 
             keys[i] = key;
 
-            if (root == NULL) {
-                root = node_new(key, value);
-            } else {
-                node_insert(&root, key, value);
-            }
+            TEST_ASSERT_EQUAL(no_node_sentinel, tree_insert(tree, key, value));
+            TEST_ASSERT_EQUAL(value, tree_insert(tree, key, value));
 
-            assert_integrity(root);
+            TEST_ASSERT_EQUAL(i + 1, tree->size);
+
+            assert_integrity(tree);
         }
 
         for (int i = 0; i < n_nodes; i++) {
             long key = keys[i];
             long value = 2 * key;
 
-            TEST_ASSERT_EQUAL(value, node_remove(&root, key));
-            TEST_ASSERT_EQUAL(node_get(root, key), no_node_sentinel);
+            TEST_ASSERT_EQUAL(value, tree_remove(tree, key));
+            TEST_ASSERT_EQUAL(no_node_sentinel, tree_remove(tree, key));
+            TEST_ASSERT_EQUAL(tree_get(tree, key), no_node_sentinel);
 
-            if (root) {
-                assert_integrity(root);
-            }
+            TEST_ASSERT_EQUAL(n_nodes - i - 1, tree->size);
+
+            assert_integrity(tree);
         }
     }
 }
 
+void test_tree_free_with_no_free_func(void) {
+    tree_t *tree = tree_new();
+    tree_insert(tree, 0, (void *)8);
+    tree_insert(tree, 2, (void *)9);
+    tree_insert(tree, -8, (void *)17);
+    tree_insert(tree, 3, (void *)-3);
+
+    tree_free(tree, NULL);
+}
+
+int tree_free_sum = 0;
+
+void value_free_func(void *val) {
+    tree_free_sum += (long) val;
+}
+
+void test_tree_free(void) {
+
+    tree_t *tree = tree_new();
+    tree_insert(tree, 0, (void *)8);
+    tree_insert(tree, 2, (void *)9);
+    tree_insert(tree, -8, (void *)17);
+    tree_insert(tree, 3, (void *)-3);
+
+    tree_free(tree, value_free_func);
+
+    TEST_ASSERT_EQUAL(31, tree_free_sum);
+}
+
 int main(void) {
     UNITY_BEGIN();
-    RUN_TEST(test_node_insert);
+    RUN_TEST(test_tree_insert);
     RUN_TEST(test_node_removal);
     RUN_TEST(test_with_random_numbers);
+    RUN_TEST(test_tree_free_with_no_free_func);
+    RUN_TEST(test_tree_free);
     return UNITY_END();
 }
