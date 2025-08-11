@@ -1,7 +1,11 @@
 #include "unity/unity.h"
 #include "../tree.h"
 
+#include <stdio.h>
 #include <stdlib.h>
+
+#define MSG_LEN 1024
+static char msg[MSG_LEN];
 
 void setUp(void) {
 }
@@ -20,19 +24,25 @@ void assert_keys_ordered(node_t *node) {
     }
 }
 
-int count_nodes(node_t *node) {
+int node_height(node_t *node) {
     if (!node) {
         return 0;
     } else {
-        return 1 + count_nodes(node->left) + count_nodes(node->right);
+        int left_height = node_height(node->left);
+        int right_height = node_height(node->right);
+
+        int greater_height = left_height < right_height ? right_height : left_height;
+        return 1 + greater_height;
     }
 }
 
 void assert_correctly_balanced(node_t *node) {
-    // TODO: Add check whether balance_factor is in interval [-1,1]
+    TEST_ASSERT(node->balance_factor >= -1 && node->balance_factor <= 1);
 
-    int expected_balance_factor = count_nodes(node->right) - count_nodes(node->left);
-    TEST_ASSERT_EQUAL(expected_balance_factor, node->balance_factor);
+    snprintf(msg, MSG_LEN, "balance factor for node with value %p", node->value);
+
+    int expected_balance_factor = node_height(node->right) - node_height(node->left);
+    TEST_ASSERT_EQUAL_MESSAGE(expected_balance_factor, node->balance_factor, msg);
 
     if (node->left) {
         assert_correctly_balanced(node->left);
@@ -52,17 +62,21 @@ void test_node_insert(void) {
 
     TEST_ASSERT_EQUAL(node_get(root, 2), no_node_sentinel);
 
-    TEST_ASSERT_EQUAL(node_insert(root, 2, (void *)2), no_node_sentinel);
-    TEST_ASSERT_EQUAL(node_insert(root, -1, (void *)-1), no_node_sentinel);
-    TEST_ASSERT_EQUAL(node_insert(root, 42, (void *)42), no_node_sentinel);
+    TEST_ASSERT_EQUAL(node_insert(&root, 2, (void *)2), no_node_sentinel);
+    TEST_ASSERT_EQUAL(node_insert(&root, -1, (void *)-1), no_node_sentinel);
+    TEST_ASSERT_EQUAL(node_insert(&root, 42, (void *)42), no_node_sentinel);
+    TEST_ASSERT_EQUAL(node_insert(&root, 1337, (void *)1337), no_node_sentinel);
+    TEST_ASSERT_EQUAL(node_insert(&root, 37, (void *)37), no_node_sentinel);
 
     TEST_ASSERT_EQUAL(2, (long)node_get(root, 2));
     TEST_ASSERT_EQUAL(-1, (long)node_get(root, -1));
     TEST_ASSERT_EQUAL(42, (long)node_get(root, 42));
+    TEST_ASSERT_EQUAL(1337, (long)node_get(root, 1337));
+    TEST_ASSERT_EQUAL(37, (long)node_get(root, 37));
 
     TEST_ASSERT_EQUAL(node_get(root, 21), no_node_sentinel);
 
-    TEST_ASSERT_EQUAL(2, (long)node_insert(root, 2, (void *)2));
+    TEST_ASSERT_EQUAL(2, (long)node_insert(&root, 2, (void *)2));
     TEST_ASSERT_EQUAL(2, (long)node_get(root, 2));
 
     assert_integrity(root);
@@ -76,7 +90,7 @@ void test_node_removal(void) {
 
     for (int i = 0; i < num_keys; i++) {
         long value = 2 * keys[i];
-        node_insert(root, keys[i], (void *)value);
+        node_insert(&root, keys[i], (void *)value);
     }
 
     assert_integrity(root);
@@ -110,7 +124,7 @@ void test_with_random_numbers(void) {
             if (root == NULL) {
                 root = node_new(key, value);
             } else {
-                node_insert(root, key, value);
+                node_insert(&root, key, value);
             }
 
             assert_integrity(root);

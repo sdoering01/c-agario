@@ -23,12 +23,14 @@ extern void *no_node_sentinel;
  * If the key already existed, the value that was previously associated with the
  * key is returned.
  */
-void *node_insert(node_t *node, int key, void *value);
+void *node_insert(node_t **node, int key, void *value);
 
 void *node_get(node_t *node, int key);
 
 // TODO: Maybe make this private
 void _node_replace(node_t **node_addr);
+
+void _node_rebalance(node_t **node_addr);
 
 void *node_remove(node_t **node_addr, int key);
 

@@ -21,7 +21,10 @@ node_t *node_new(int key, void *value) {
     return node;
 }
 
-void *node_insert(node_t *node, int key, void *value) {
+void *node_insert(node_t **node_addr, int key, void *value) {
+    void *return_value = no_node_sentinel;
+    node_t *node = *node_addr;
+
     assert(node);
 
     if (key == node->key) {
@@ -30,22 +33,14 @@ void *node_insert(node_t *node, int key, void *value) {
         return prev_value;
     }
 
-    // TODO: With the current implementation, replacing a node that holds `NULL`
-    // as a value, will still update the balance factor, since a previous value
-    // of `NULL` and the absence of a previous value (also `NULL`) cannot be
-    // differentiated. This could be fixed with a sentinel value, but that would
-    // make the API non-intuitive. Still, the caller might want to know whether
-    // there was a node that held `NULL` or whether there was no node
-    // previously.
-
-    // TODO: Re-balance tree
     if (key < node->key) {
         if (node->left) {
-            void *prev_value = node_insert(node->left, key, value);
-            if (prev_value == no_node_sentinel) {
+            int prev_balance_factor = node->left->balance_factor;
+            return_value = node_insert(&node->left, key, value);
+            int new_balance_factor = node->left->balance_factor;
+            if (prev_balance_factor == 0 && new_balance_factor != 0) {
                 node->balance_factor -= 1;
             }
-            return prev_value;
         } else {
             node_t *new_node = node_new(key, value);
             node->left = new_node;
@@ -53,11 +48,12 @@ void *node_insert(node_t *node, int key, void *value) {
         }
     } else {
         if (node->right) {
-            void *prev_value = node_insert(node->right, key, value);
-            if (prev_value == no_node_sentinel) {
+            int prev_balance_factor = node->right->balance_factor;
+            return_value = node_insert(&node->right, key, value);
+            int new_balance_factor = node->right->balance_factor;
+            if (prev_balance_factor == 0 && new_balance_factor != 0) {
                 node->balance_factor += 1;
             }
-            return prev_value;
         } else {
             node_t *new_node = node_new(key, value);
             node->right = new_node;
@@ -65,7 +61,9 @@ void *node_insert(node_t *node, int key, void *value) {
         }
     }
 
-    return no_node_sentinel;
+    _node_rebalance(node_addr);
+
+    return return_value;
 }
 
 void *node_get(node_t *node, int key) {
@@ -83,15 +81,13 @@ void *node_get(node_t *node, int key) {
 }
 
 void *node_remove(node_t **node_addr, int key) {
+    void *return_value;
     node_t *node = *node_addr;
 
     if (!node) {
         return no_node_sentinel;
     }
 
-    // TODO: Consider `NULL` values for nodes. See comment in `node_insert`.
-
-    // TODO: Re-balance tree
     if (key == node->key) {
         void *value = node->value;
 
@@ -99,49 +95,175 @@ void *node_remove(node_t **node_addr, int key) {
 
         free(node);
 
-        return value;
+        return_value = value;
     } else if (key < node->key) {
+        int prev_left_balance_factor = node->left ? node->left->balance_factor : 0;
         node_t *prev_value = node_remove(&node->left, key);
         if (prev_value != no_node_sentinel) {
-            node->balance_factor += 1;
+            if (!node->left || (prev_left_balance_factor != 0 && node->left->balance_factor == 0)) {
+                node->balance_factor += 1;
+                _node_rebalance(node_addr);
+            }
         }
-        return prev_value;
+        return_value = prev_value;
     } else {
+        int prev_right_balance_factor = node->right ? node->right->balance_factor : 0;
         node_t *prev_value = node_remove(&node->right, key);
         if (prev_value != no_node_sentinel) {
-            node->balance_factor -= 1;
+            if (!node->right || (prev_right_balance_factor != 0 && node->right->balance_factor == 0)) {
+                node->balance_factor -= 1;
+                _node_rebalance(node_addr);
+            }
         }
-        return prev_value;
+        return_value = prev_value;
+    }
+
+    return return_value;
+}
+
+/**
+ * Iniitial left rotation in large rotation.
+ */
+void _node_rotate_left_prepare(node_t **node_addr) {
+    node_t *old_parent = *node_addr;
+    node_t *new_parent = old_parent->right;
+    *node_addr = new_parent;
+    old_parent->right = new_parent->left;
+    new_parent->left = old_parent;
+
+    if (new_parent->balance_factor == 0) {
+        new_parent->balance_factor = -1;
+        old_parent->balance_factor = 0;
+    } else if (new_parent->balance_factor == 1) {
+        new_parent->balance_factor = -1;
+        old_parent->balance_factor = -1;
+    } else if (new_parent->balance_factor == -1) {
+        new_parent->balance_factor = -2;
+        old_parent->balance_factor = 0;
     }
 }
 
+/**
+ * Iniitial right rotation in large rotation.
+ */
+void _node_rotate_right_prepare(node_t **node_addr) {
+    node_t *old_parent = *node_addr;
+    node_t *new_parent = old_parent->left;
+    *node_addr = new_parent;
+    old_parent->left = new_parent->right;
+    new_parent->right = old_parent;
+
+    if (new_parent->balance_factor == 0) {
+        new_parent->balance_factor = 1;
+        old_parent->balance_factor = 0;
+    } else if (new_parent->balance_factor == -1) {
+        new_parent->balance_factor = 1;
+        old_parent->balance_factor = 1;
+    } else if (new_parent->balance_factor == 1) {
+        new_parent->balance_factor = 2;
+        old_parent->balance_factor = 0;
+    }
+}
+
+void _node_rotate_left(node_t **node_addr) {
+    node_t *old_parent = *node_addr;
+    node_t *new_parent = old_parent->right;
+    *node_addr = new_parent;
+    old_parent->right = new_parent->left;
+    new_parent->left = old_parent;
+
+    if (new_parent->balance_factor == 0) {
+        old_parent->balance_factor = 1;
+        new_parent->balance_factor = -1;
+    } else if (new_parent->balance_factor == 2) {
+        // Could extract this into function that does big rotation, since it is
+        // only needed there
+        old_parent->balance_factor = -1;
+        new_parent->balance_factor = 0;
+    } else {
+        old_parent->balance_factor = 0;
+        new_parent->balance_factor = 0;
+    }
+}
+
+void _node_rotate_right(node_t **node_addr) {
+    node_t *old_parent = *node_addr;
+    node_t *new_parent = old_parent->left;
+    *node_addr = new_parent;
+    old_parent->left = new_parent->right;
+    new_parent->right = old_parent;
+
+    if (new_parent->balance_factor == 0) {
+        old_parent->balance_factor = -1;
+        new_parent->balance_factor = 1;
+    } else if (new_parent->balance_factor == -2) {
+        // Could extract this into function that does big rotation, since it is
+        // only needed there
+        old_parent->balance_factor = 1;
+        new_parent->balance_factor = 0;
+    } else {
+        old_parent->balance_factor = 0;
+        new_parent->balance_factor = 0;
+    }
+}
+
+void _node_rebalance(node_t **node_addr) {
+    node_t *node = *node_addr;
+
+    if (node->balance_factor < -1) {
+        if (node->left->balance_factor <= 0) {
+            _node_rotate_right(node_addr);
+        } else {
+            _node_rotate_left_prepare(&node->left);
+            _node_rotate_right(node_addr);
+        }
+    } else if (node->balance_factor > 1) {
+        if (node->right->balance_factor >= 0) {
+            _node_rotate_left(node_addr);
+        } else {
+            _node_rotate_right_prepare(&node->right);
+            _node_rotate_left(node_addr);
+        }
+    }
+}
 
 node_t **_node_find_deepest_child_in_direction(node_t **node_addr, int direction) {
-    // if `go_left` is false, this means to go right
-
     node_t *node = *node_addr;
+    node_t **ret_node_addr = node_addr;
     assert(node);
 
     if (direction == LEFT && node->left) {
-        node->balance_factor += 1;
-        return _node_find_deepest_child_in_direction(&node->left, direction);
+        int prev_left_balance_factor = node->left->balance_factor;
+        ret_node_addr = _node_find_deepest_child_in_direction(&node->left, direction);
+        // `node->left` is the last node in this direction, so we will take it out and thus shorten the left sub-tree
+        if (!node->left->left || (prev_left_balance_factor != 0 && node->left->balance_factor == 0)) {
+            node->balance_factor += 1;
+            _node_rebalance(node_addr);
+        }
     } else if (direction == RIGHT && node->right) {
-        node->balance_factor -= 1;
-        return _node_find_deepest_child_in_direction(&node->right, direction);
+        int prev_right_balance_factor = node->right->balance_factor;
+        ret_node_addr = _node_find_deepest_child_in_direction(&node->right, direction);
+        if (!node->right->right || (prev_right_balance_factor != 0 && node->right->balance_factor == 0)) {
+            node->balance_factor -= 1;
+            _node_rebalance(node_addr);
+        }
     } else {
-        return node_addr;
+        ret_node_addr = node_addr;
     }
+
+    return ret_node_addr;
 }
 
+/**
+ * Finds a replacement (or NULL) for the node at `node_addr` and assigns it to
+ * that address.
+ */
 void _node_replace(node_t **node_addr) {
     node_t *node = *node_addr;
 
     if (!node) {
         return;
     }
-
-    // TODO: Update balance factor
-    // TODO: Re-balance tree
 
     if (node->left || node->right) {
         node_t **replacement_addr = NULL;
@@ -162,6 +284,7 @@ void _node_replace(node_t **node_addr) {
         }
 
         node_t **child_addr = child_direction == LEFT ? &node->left : &node->right;
+        int prev_child_balance_factor = (*child_addr)->balance_factor;
         replacement_addr = _node_find_deepest_child_in_direction(child_addr, !child_direction);
 
         node_t *replacement_node = *replacement_addr;
@@ -174,9 +297,15 @@ void _node_replace(node_t **node_addr) {
         replacement_node->balance_factor = node->balance_factor;
 
         if (child_direction == LEFT) {
-            replacement_node->balance_factor += 1;
+            if (!node->left || (prev_child_balance_factor != 0 && node->left->balance_factor == 0)) {
+                replacement_node->balance_factor += 1;
+                _node_rebalance(node_addr);
+            }
         } else {
-            replacement_node->balance_factor -= 1;
+            if (!node->right || (prev_child_balance_factor != 0 && node->right->balance_factor == 0)) {
+                replacement_node->balance_factor -= 1;
+                _node_rebalance(node_addr);
+            }
         }
     } else {
         // Node has no children, so we just remove it. The calling function has

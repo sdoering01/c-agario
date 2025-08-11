@@ -1,23 +1,40 @@
 #include "tree.h"
 
+#include <stdio.h>
+
 int main(void) {
-    node_t *root = node_new(5, (void *)5);
+    node_t *root = NULL;
 
-    node_insert(root, 2, (void *)2);
-    node_insert(root, 3, (void *)3);
-    node_insert(root, 9, (void *)9);
-    node_insert(root, 10, (void *)10);
-    node_insert(root, 11, (void *)11);
-    node_insert(root, 4, (void *)4);
-    node_insert(root, 7, (void *)7);
-    node_insert(root, 6, (void *)6);
-    node_insert(root, 8, (void *)8);
+    // long nums[] = {5, 2, 3, 9, 10, 11, 4, 7, 6, 8};
+    long nums[] = {1, 2, -1, 42, 1337, 37};
 
-    node_print(root);
+    int n_nums = sizeof(nums) / sizeof(nums[0]);
+    for (int i = 0; i < n_nums; i++) {
+        if (!root) {
+            root = node_new(nums[i], (void *)nums[i]);
+        } else {
+            node_insert(&root, nums[i], (void *)nums[i]);
+        }
+        node_print(root);
+        printf("--------------------\n");
+    }
 
-    node_remove(&root, 9);
+    printf("\nREMOVE\n\n");
 
-    node_print(root);
+    for (int i = 0; i < n_nums; i++) {
+        node_remove(&root, nums[i]);
+        printf("removed\n");
+        node_print(root);
+        printf("--------------------\n");
+    }
+
+    // node_insert(&root, 12, (void *)12);
+
+    // node_print(root);
+
+    // node_remove(&root, 9);
+    //
+    // node_print(root);
 
     return 0;
 }
