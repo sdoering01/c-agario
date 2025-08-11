@@ -351,6 +351,14 @@ void node_free_recursive(node_t *node, void (*value_free_func)(void *)) {
     }
 }
 
+void node_for_each_recursive(node_t *node, void (*func)(void *)) {
+    if (node) {
+        func(node->value);
+        node_for_each_recursive(node->left, func);
+        node_for_each_recursive(node->right, func);
+    }
+}
+
 tree_t *tree_new(void) {
     tree_t *tree = calloc(1, sizeof(tree_t));
     // TODO: Handle allocation failure
@@ -391,6 +399,10 @@ void *tree_remove(tree_t *tree, int key) {
         tree->size -= 1;
     }
     return ret_value;
+}
+
+void tree_for_each_value(tree_t *tree, void (*func)(void *)) {
+    node_for_each_recursive(tree->root, func);
 }
 
 void tree_print(tree_t *tree) {

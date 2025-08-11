@@ -38,6 +38,8 @@ void *tree_get(tree_t *tree, int key);
  */
 void *tree_remove(tree_t *tree, int key);
 
+void tree_for_each_value(tree_t *tree, void (*func)(void *));
+
 void tree_print(tree_t *tree);
 
 #endif // TREE_H

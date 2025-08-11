@@ -161,11 +161,10 @@ void test_tree_free_with_no_free_func(void) {
 int tree_free_sum = 0;
 
 void value_free_func(void *val) {
-    tree_free_sum += (long) val;
+    tree_free_sum += (long)val;
 }
 
 void test_tree_free(void) {
-
     tree_t *tree = tree_new();
     tree_insert(tree, 0, (void *)8);
     tree_insert(tree, 2, (void *)9);
@@ -177,6 +176,25 @@ void test_tree_free(void) {
     TEST_ASSERT_EQUAL(31, tree_free_sum);
 }
 
+int tree_for_each_value_sum = 0;
+
+void for_each_value(void *val) {
+    tree_for_each_value_sum += (long)val;
+}
+
+void test_tree_for_each_value(void) {
+    tree_t *tree = tree_new();
+    tree_insert(tree, 7, (void *)0);
+    tree_insert(tree, 1, (void *)5);
+    tree_insert(tree, 0, (void *)2);
+    tree_insert(tree, -3, (void *)-8);
+    tree_insert(tree, 12, (void *)4);
+
+    tree_for_each_value(tree, for_each_value);
+
+    TEST_ASSERT_EQUAL(3, tree_for_each_value_sum);
+}
+
 int main(void) {
     UNITY_BEGIN();
     RUN_TEST(test_tree_insert);
@@ -184,5 +202,6 @@ int main(void) {
     RUN_TEST(test_with_random_numbers);
     RUN_TEST(test_tree_free_with_no_free_func);
     RUN_TEST(test_tree_free);
+    RUN_TEST(test_tree_for_each_value);
     return UNITY_END();
 }
