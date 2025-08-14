@@ -1,6 +1,6 @@
 # C Agario
 
-This is a remake of [agar.io](agar.io) in pure C (although GitHub falsely
+This is a remake of [agar.io](https://agar.io) in pure C (although GitHub falsely
 claims that there is some C++ present as well).
 
 The motivation for this project is to learn about low level network
